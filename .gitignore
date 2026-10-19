@@ -1,0 +1,29 @@
+# Secrets
+.env
+
+# Virtual environments
+.venv/
+.venv-check/
+
+# Python build artefacts
+__pycache__/
+*.pyc
+
+# Private project files — never committed
+CLAUDE.md
+PROJECT-STATE.md
+ap-invoice-copilot-*.md
+phase1-model-test/
+
+# Editor and tool settings
+.claude/
+.vscode/
+
+# Local databases and run output
+*.sqlite
+*.db
+output/
+
+# Windows filesystem cruft
+Thumbs.db
+desktop.ini
