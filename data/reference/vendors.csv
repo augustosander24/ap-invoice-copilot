@@ -1,0 +1,16 @@
+vendor_id,vendor_name,category,cost_center,contact_email,lease_amount
+V-1001,Harbor Industrial Supply,inventory,,ar@harborindustrial.example,
+V-1002,Keystone Fasteners,inventory,,ar@keystonefasteners.example,
+V-1003,Summit Packaging,inventory,,ar@summitpackaging.example,
+V-1004,Pioneer Electrical Wholesale,inventory,,ar@pioneerelectrical.example,
+V-2001,Riverside Power & Light,utilities,CC-200,ar@riversidepower.example,
+V-2002,Clearwater Water Authority,utilities,CC-200,ar@clearwaterwater.example,
+V-2003,GreenCycle Waste Services,utilities,CC-100,ar@greencyclewaste.example,
+V-3001,Lakeside Industrial Properties,rent,CC-100,ar@lakesideproperties.example,18500.00
+V-3002,Oakmont Office Park,rent,CC-200,ar@oakmontofficepark.example,6200.00
+V-4001,Marlow County Treasurer,taxes,CC-400,ar@marlowcounty.example,
+V-5001,CloudLedger Software,subscriptions,CC-400,ar@cloudledger.example,
+V-5002,RouteWise Logistics Software,subscriptions,CC-300,ar@routewise.example,
+V-6001,Bennett & Cole CPAs,professional_services,CC-400,ar@bennettcole.example,
+V-6002,Ironbridge IT Consulting,professional_services,CC-300,ar@ironbridgeit.example,
+V-7001,Delta Signage Co.,,,ar@deltasignage.example,

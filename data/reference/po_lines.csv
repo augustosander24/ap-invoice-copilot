@@ -1,0 +1,15 @@
+po_number,line,item,description,qty_ordered,unit_price
+PO-26101,1,IND-2210,Nitrile work gloves box of 100,40,28.50
+PO-26101,2,IND-2415,Shop towel rolls case of 12,60,34.75
+PO-26102,1,IND-3120,Heavy-duty pallet jack 2500 kg,6,785.00
+PO-26102,2,IND-3305,Steel shelving unit 5-tier,18,242.00
+PO-26103,1,FAS-1050,Hex bolts M12 x 60 mm box of 250,48,62.40
+PO-26103,2,FAS-1180,Stainless washers M12 box of 500,100,18.90
+PO-26104,1,FAS-1265,Socket head cap screws M8 x 30 mm box of 500,24,41.25
+PO-26104,2,FAS-1390,Threaded rod M10 x 1 m,150,7.60
+PO-26105,1,PKG-1040,Corrugated shipping cartons 18x12x10 in bundle of 25,120,23.60
+PO-26105,2,PKG-1125,Stretch wrap film 18 in x 1500 ft roll,80,31.50
+PO-26106,1,PKG-1210,Poly mailers 10x13 in case of 500,45,48.00
+PO-26107,1,PKG-1455,Kraft paper void fill 30 in x 1200 ft roll,36,54.25
+PO-26107,2,PKG-1620,Carton sealing tape 2 in x 110 yd case of 36,70,67.40
+PO-26108,1,ELC-4075,THHN building wire 12 AWG 500 ft spool,25,118.00
