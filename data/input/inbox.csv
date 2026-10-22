@@ -1,0 +1,19 @@
+message_id,received_date,from_email,vendor_id,invoice_number,body
+M-01,2026-12-01,sofia.ramos@northgate.example,V-1001,HIS-40817,"The 36.25 towel price is right. Harbor's increase took effect November 1 and I agreed to it. I'm updating the PO today, so please release the invoice."
+M-02,2026-12-01,ar@summitpackaging.example,V-1003,009102,"Sorry, we left the PO number off. These goods shipped against PO-26107. We'll send a corrected invoice by December 2."
+M-03,2026-12-01,ar@pioneerelectrical.example,V-1004,PEW-77104,"Our mistake, the total should read 3,100.00. A corrected invoice will follow today."
+M-04,2026-12-01,ar@riversidepower.example,V-2001,RPL-104834,"Confirmed, the October bill was sent to you twice by mistake. Please void the copy."
+M-05,2026-12-01,daniel.ortiz@northgate.example,V-4001,MCT-2026-H2,Approved. This is the second-half property tax and matches the spring bill.
+M-06,2026-12-01,daniel.ortiz@northgate.example,V-6001,BC-2026-041,"Confirmed, Bennett & Cole delivered the year-end audit planning work in November."
+M-07,2026-12-02,ar@summitpackaging.example,V-1003,009087,"You're right, the mailers belong to PO-26106, not PO-26105. We'll send a corrected invoice by December 3."
+M-08,2026-12-02,sofia.ramos@northgate.example,V-1002,KF-23318,Only 60 of the washers have arrived. Keystone has the other 40 on backorder and ships them December 9. Please hold until they're received.
+M-09,2026-12-02,tom.keller@northgate.example,V-1004,PEW-77104,124.00 is Pioneer's new price and I've agreed to it. OK to pay at 124.00.
+M-10,2026-12-02,laura.mendes@northgate.example,V-2003,GCW-0043,Approved.
+M-11,2026-12-02,daniel.ortiz@northgate.example,V-5001,CL-88210,"Why is this still 1,450.00? We moved to the Standard plan in October, which should cost less."
+M-12,2026-12-02,hannah.cho@northgate.example,V-6002,IBC-1233,"Yes, Ironbridge finished the firewall upgrade on November 20. Service received."
+M-13,2026-12-03,tom.keller@northgate.example,V-1002,KF-23342,"Not mine anymore. Sofia Ramos took over the Keystone account last month, please send it to her."
+M-14,2026-12-03,ar@harborindustrial.example,V-1001,HIS-40903,That PO number came from your warehouse team when they ordered the glasses. Which PO number should we use?
+M-15,2026-12-03,priya.nair@northgate.example,V-5002,RW-3317,Let me check with the warehouse about the scanners and get back to you.
+M-16,2026-12-04,laura.mendes@northgate.example,V-3001,LIP-2026-11,Don't pay the late fee. October rent went out on time. Pay the base rent only.
+M-17,2026-12-07,tom.keller@northgate.example,V-1001,HIS-40852,"Sorry for the delay. The shelving should be 242.00 as on the PO. Don't pay the difference, ask Harbor for a credit memo."
+M-18,2026-12-07,margaret.hale@northgate.example,V-6001,BC-2026-041,Approved.
