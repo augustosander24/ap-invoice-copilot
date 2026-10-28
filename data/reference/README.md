@@ -125,5 +125,7 @@ historical average. Sorted by `vendor_id`, then `invoice_date`.
 | `amount` | Invoice total | two-place decimal above zero |
 
 A utilities vendor has either 12 or more consecutive service months with no
-gaps or repeats, or 2 bills or fewer. Nothing in between: the design defines
-no rule for 3 to 11 bills, so the data does not contain that case.
+gaps or repeats, or 2 bills or fewer. Nothing in between: the data keeps that
+case out on purpose. The rules engine still handles it: from a vendor's 4th
+bill on, it compares the bill with the average of the bills posted so far, up
+to 12, and unit tests cover it.

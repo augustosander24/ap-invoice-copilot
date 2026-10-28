@@ -60,7 +60,7 @@ to run there, so the column is not scored.
 | `missing_po` | An inventory vendor's invoice quotes no PO |
 | `invalid_po` | The quoted PO can't be billed: a closed PO or another vendor's PO |
 | `exact_duplicate` | Same vendor and invoice number as a posted invoice |
-| `possible_duplicate` | Close to a posted invoice without being an exact match; AP decides |
+| `possible_duplicate` | Same vendor and the same PO number, or the same invoice number once leading zeros and punctuation are removed, as a posted invoice, without being an exact match; the agent judges it a likely duplicate and AP decides |
 | `missing_data` | Missing or incorrect invoice data, such as a required field left blank or a header total that doesn't equal its lines |
 | `approval_required` | A non-PO rule requires approval |
 | `confirmation_required` | The requester must confirm the service was received |
