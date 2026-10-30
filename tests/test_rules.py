@@ -243,3 +243,22 @@ def test_no_requester_has_no_approval():
     assert assessment.approval_reason == ""
     assert assessment.approver_id == ""
     assert assessment.gl_account == "6500"
+
+
+def test_agent_cannot_clear_a_same_number_candidate():
+    ref = make_reference(history=[posted("V-3", "T-001", "70.00")])
+    assessment = assess(make_invoice("V-3", "70.00", number="T-1"), ref)
+    assert assessment.agent_requests[0].same_number == ("T-001",)
+    outcome = finalize(assessment, ref, Verdicts(duplicate=False))
+    actions = {action.role: action for action in outcome.actions}
+    assert "possible_duplicate" in outcome.findings
+    assert actions["approver"].status == "held"
+    assert outcome.facts[-1] == ("agent verdict: not a duplicate; AP reviews it anyway, because posted "
+                                 "T-001 has the same invoice number once normalized")
+    po_ref = make_reference(purchase_orders=[po("PO-1")], po_lines=[po_line("PO-1", "1", 1, "50.00")],
+                            received={("PO-1", "1"): 1},
+                            history=[posted("V-1", "S-1", "900.00", po_number="PO-1")])
+    po_only = assess(make_invoice("V-1", "50.00", number="S-2", po_number="PO-1",
+                                  lines=[line("1", 1, "50.00")]), po_ref)
+    assert po_only.agent_requests[0].same_number == ()
+    assert "possible_duplicate" not in finalize(po_only, po_ref, Verdicts(duplicate=False)).findings

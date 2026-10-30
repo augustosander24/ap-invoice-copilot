@@ -39,6 +39,7 @@ _CENT = Decimal("0.01")
 class AgentRequest:
     kind: str
     detail: tuple[str, ...] = ()
+    same_number: tuple[str, ...] = ()  # duplicate_check: candidates with the same normalized invoice number
 
 
 @dataclass(frozen=True)
@@ -121,22 +122,25 @@ def _duplicate_candidates(invoice: Invoice, ref: Reference, notes: _Notes) -> No
     """Check 2: posted invoices of the same vendor with the same PO or the same normalized number.
 
     Amount and date are never compared. Candidates go to the agent; no finding is added here.
+    A same-number candidate is also listed in same_number: finalize() sends it to AP whatever
+    the agent's verdict.
     """
     number = normalize_invoice_number(invoice.invoice_number)
-    candidates = []
+    candidates, same_number = [], []
     for posted in ref.history.get(invoice.vendor_id, ()):
         matches = []
         if invoice.po_number and posted["po_number"] == invoice.po_number:
             matches.append(f"same PO {invoice.po_number}")
         if normalize_invoice_number(posted["invoice_number"]) == number:
             matches.append("same invoice number once normalized")
+            same_number.append(posted["invoice_number"])
         if matches:
             candidates.append(posted["invoice_number"])
             notes.facts.append(f"duplicate candidate: posted {posted['invoice_number']} "
                                f"({posted['invoice_date']}, {_money(posted['amount'])}): "
                                f"{', '.join(matches)}")
     if candidates:
-        notes.requests.append(AgentRequest("duplicate_check", tuple(candidates)))
+        notes.requests.append(AgentRequest("duplicate_check", tuple(candidates), tuple(same_number)))
 
 
 def _missing_data(invoice: Invoice, vendor: dict[str, str], notes: _Notes) -> None:

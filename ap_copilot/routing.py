@@ -57,12 +57,22 @@ def _check_verdicts(assessment: Assessment, verdicts: Verdicts) -> None:
 
 
 def _apply_verdicts(assessment: Assessment, verdicts: Verdicts) -> tuple[tuple[str, ...], tuple[str, ...]]:
-    """The assessment's findings and facts, plus the agent findings from a yes verdict, in canonical order."""
+    """The assessment's findings and facts, plus the agent findings, in canonical order.
+
+    A yes adds the agent finding. A duplicate candidate with the same invoice number once
+    normalized is a possible duplicate even on a no: the agent can't clear it, AP decides.
+    """
     findings = set(assessment.findings)
     facts = list(assessment.facts)
+    same_number = next((request.same_number for request in assessment.agent_requests
+                        if request.kind == "duplicate_check"), ())
     if verdicts.duplicate is True:
         findings.add("possible_duplicate")
         facts.append("agent verdict: likely duplicate")
+    elif same_number:
+        findings.add("possible_duplicate")
+        facts.append(f"agent verdict: not a duplicate; AP reviews it anyway, because posted "
+                     f"{', '.join(same_number)} has the same invoice number once normalized")
     if verdicts.mismatch is True:
         findings.add("category_mismatch")
         facts.append("agent verdict: content doesn't fit the category")
@@ -119,8 +129,9 @@ def finalize(assessment: Assessment, ref: Reference, verdicts: Verdicts) -> Outc
     """Apply the agent's verdicts and route every finding.
 
     finalize() turns the agent's verdicts into findings, so the agent never writes
-    a finding itself. On a possible duplicate, every finding is listed and the
-    non-AP actions are held until AP rules (design section 4).
+    a finding itself, and its no can't clear a same-number duplicate candidate. On a
+    possible duplicate, every finding is listed and the non-AP actions are held until
+    AP rules (design section 4).
     """
     _check_verdicts(assessment, verdicts)
     findings, facts = _apply_verdicts(assessment, verdicts)
