@@ -9,7 +9,7 @@ parsing; scripts/check_data.py is the validator.
 
 import csv
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal
 from pathlib import Path
 
@@ -56,6 +56,7 @@ class Reference:
     po_lines: dict[tuple[str, str], dict[str, str]]
     received: dict[tuple[str, str], int]
     history: dict[str, tuple[dict[str, str], ...]]
+    receipts: dict[str, tuple[dict[str, str], ...]] = field(default_factory=dict)
 
 
 def read_csv(path: Path) -> list[dict[str, str]]:
@@ -68,8 +69,10 @@ def load_reference(folder: Path = REFERENCE_DIR) -> Reference:
     """Read the eight reference CSVs into lookups."""
     folder = Path(folder)
     received = defaultdict(int)
+    receipts = defaultdict(list)
     for row in read_csv(folder / "receipts.csv"):
         received[(row["po_number"], row["line"])] += int(row["qty_received"])
+        receipts[row["po_number"]].append(row)
     history = defaultdict(list)
     for row in read_csv(folder / "invoice_history.csv"):
         history[row["vendor_id"]].append(row)
@@ -83,6 +86,7 @@ def load_reference(folder: Path = REFERENCE_DIR) -> Reference:
         po_lines={(row["po_number"], row["line"]): row for row in read_csv(folder / "po_lines.csv")},
         received=dict(received),
         history={vendor_id: tuple(rows) for vendor_id, rows in history.items()},
+        receipts={po_number: tuple(rows) for po_number, rows in receipts.items()},
     )
 
 

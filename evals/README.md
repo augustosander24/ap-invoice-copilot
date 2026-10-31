@@ -60,7 +60,7 @@ to run there, so the column is not scored.
 | `missing_po` | An inventory vendor's invoice quotes no PO |
 | `invalid_po` | The quoted PO can't be billed: a closed PO or another vendor's PO |
 | `exact_duplicate` | Same vendor and invoice number as a posted invoice |
-| `possible_duplicate` | Same vendor and the same PO number, or the same invoice number once leading zeros and punctuation are removed, as a posted invoice, without being an exact match; the agent judges it a likely duplicate and AP decides |
+| `possible_duplicate` | Same vendor and the same PO number, or the same invoice number once leading zeros and punctuation are removed, as a posted invoice, without being an exact match; the agent judges it a likely duplicate and AP decides. A same-number match goes to AP even when the agent says no |
 | `missing_data` | Missing or incorrect invoice data, such as a required field left blank or a header total that doesn't equal its lines |
 | `approval_required` | A non-PO rule requires approval |
 | `confirmation_required` | The requester must confirm the service was received |
@@ -83,18 +83,19 @@ to run there, so the column is not scored.
 
 ### Lookup kinds (`first_tool`)
 
-| Kind | Looks up |
-|---|---|
-| `po` | The PO quoted on the invoice |
-| `receipts` | Receipts against that PO |
-| `open_pos` | The vendor's open POs |
-| `similar_invoices` | Posted invoices similar to this one |
-| `bill_history` | The vendor's past bills |
-| `vendor` | The vendor master record |
+| Kind | Looks up | Tool |
+|---|---|---|
+| `po` | The PO quoted on the invoice | `get_purchase_order` |
+| `receipts` | Receipts against that PO | `get_goods_receipts` |
+| `open_pos` | The vendor's open POs | `find_open_purchase_orders` |
+| `similar_invoices` | Posted invoices from the same vendor with the same PO number, or the same invoice number once normalized | `find_similar_invoices` |
+| `bill_history` | The vendor's past bills | `get_bill_history` (non-PO investigator) |
+| `vendor` | The vendor master record | `get_vendor` |
 
 `|` separates accepted alternatives. For a quantity hold, either the PO or the
-receipts lookup first is accepted (`po|receipts`). These are kinds, not tool
-names; tool names are mapped to them in Phase 6.
+receipts lookup first is accepted (`po|receipts`). The agent's first tool call
+is mapped to its kind with `TOOL_KINDS` in `ap_copilot/tools.py` and scored
+against this column.
 
 ### AP-queue findings
 

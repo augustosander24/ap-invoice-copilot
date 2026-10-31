@@ -1,0 +1,240 @@
+{
+  "EX-001": [
+    {
+      "tool": "get_purchase_order",
+      "args": {
+        "po_number": "PO-26101"
+      }
+    },
+    {
+      "answer": {
+        "price_variance_explanation": {
+          "explanation": "Line 2 towels are billed at 36.25 against the PO price of 34.75 on all 60 units; the vendor likely raised its price without a PO change.",
+          "evidence": [
+            "po_line:PO-26101:2",
+            "invoice_line:EX-001:2"
+          ]
+        }
+      }
+    }
+  ],
+  "EX-002": [
+    {
+      "tool": "get_purchase_order",
+      "args": {
+        "po_number": "PO-26102"
+      }
+    },
+    {
+      "answer": {
+        "price_variance_explanation": {
+          "explanation": "The shelving is billed at 249.50 against the PO price of 242.00 for 18 units, likely a price increase not yet on the PO.",
+          "evidence": [
+            "po_line:PO-26102:2"
+          ]
+        }
+      }
+    }
+  ],
+  "EX-003": [
+    {
+      "tool": "get_purchase_order",
+      "args": {
+        "po_number": "PO-26108"
+      }
+    },
+    {
+      "tool": "find_open_purchase_orders",
+      "args": {
+        "vendor_id": "V-1001"
+      }
+    },
+    {
+      "answer": {
+        "po_match": {
+          "po_number": "none",
+          "reason": "PO-26108 belongs to V-1004. Harbor's open POs PO-26101 and PO-26102 have no safety glasses item IND-2630.",
+          "evidence": [
+            "open_pos:V-1001",
+            "po:PO-26108"
+          ]
+        }
+      }
+    }
+  ],
+  "EX-004": [
+    {
+      "tool": "get_purchase_order",
+      "args": {
+        "po_number": "PO-26103"
+      }
+    },
+    {
+      "tool": "get_goods_receipts",
+      "args": {
+        "po_number": "PO-26103"
+      }
+    },
+    {
+      "answer": {
+        "quantity_variance_explanation": {
+          "explanation": "100 washers are billed but 60 were received on 2026-10-09; the other 40 are likely still on the way.",
+          "evidence": [
+            "receipts:PO-26103",
+            "receipt:R-5007"
+          ]
+        }
+      }
+    }
+  ],
+  "EX-005": [
+    {
+      "tool": "get_purchase_order",
+      "args": {
+        "po_number": "PO-26104"
+      }
+    },
+    {
+      "tool": "get_goods_receipts",
+      "args": {
+        "po_number": "PO-26104"
+      }
+    },
+    {
+      "answer": {
+        "price_variance_explanation": {
+          "explanation": "The threaded rod is billed at 7.95 against the PO price of 7.60 for 150 units.",
+          "evidence": [
+            "po_line:PO-26104:2"
+          ]
+        },
+        "quantity_variance_explanation": {
+          "explanation": "No receipts are posted on PO-26104, so the 24 screws and 150 rods are not received yet.",
+          "evidence": [
+            "receipts:PO-26104"
+          ]
+        }
+      }
+    }
+  ],
+  "EX-006": [
+    {
+      "tool": "get_purchase_order",
+      "args": {
+        "po_number": "PO-26105"
+      }
+    },
+    {
+      "tool": "find_similar_invoices",
+      "args": {
+        "vendor_id": "V-1003",
+        "invoice_number": "009087",
+        "po_number": "PO-26105"
+      }
+    },
+    {
+      "tool": "find_open_purchase_orders",
+      "args": {
+        "vendor_id": "V-1003"
+      }
+    },
+    {
+      "answer": {
+        "duplicate_check": {
+          "likely_duplicate": false,
+          "reason": "Posted 008817 billed 5352.00 for cartons and stretch wrap on PO-26105; this invoice bills 45 poly mailers for 2160.00, a different item and amount.",
+          "evidence": [
+            "posted:V-1003:008817",
+            "po_line:PO-26105:1",
+            "invoice_line:EX-006:1"
+          ]
+        },
+        "po_match": {
+          "po_number": "PO-26106",
+          "reason": "PO-26106 line 1 is poly mailers PKG-1210, 45 at 48.00: the same item, quantity, and price.",
+          "evidence": [
+            "po_line:PO-26106:1"
+          ]
+        }
+      }
+    }
+  ],
+  "EX-007": [
+    {
+      "tool": "find_open_purchase_orders",
+      "args": {
+        "vendor_id": "V-1003"
+      }
+    },
+    {
+      "answer": {
+        "po_match": {
+          "po_number": "PO-26107",
+          "reason": "PO-26107 has both items: 36 PKG-1455 at 54.25 and 70 PKG-1620 at 67.40.",
+          "evidence": [
+            "po_line:PO-26107:1",
+            "po_line:PO-26107:2"
+          ]
+        }
+      }
+    }
+  ],
+  "EX-008": [
+    {
+      "tool": "find_similar_invoices",
+      "args": {
+        "vendor_id": "V-1003",
+        "invoice_number": "8817",
+        "po_number": "PO-26105"
+      }
+    },
+    {
+      "tool": "get_purchase_order",
+      "args": {
+        "po_number": "PO-26105"
+      }
+    },
+    {
+      "tool": "find_open_purchase_orders",
+      "args": {
+        "vendor_id": "V-1003"
+      }
+    },
+    {
+      "answer": {
+        "duplicate_check": {
+          "likely_duplicate": true,
+          "reason": "Posted 008817 has the same PO-26105, date 2026-08-24, and amount 5352.00; 8817 is the same number without the leading zeros.",
+          "evidence": [
+            "posted:V-1003:008817"
+          ]
+        },
+        "po_match": {
+          "po_number": "none",
+          "reason": "The open POs PO-26106 and PO-26107 do not have the cartons PKG-1040 or the stretch wrap PKG-1125.",
+          "evidence": [
+            "open_pos:V-1003"
+          ]
+        }
+      }
+    }
+  ],
+  "EX-009": [
+    {
+      "tool": "get_purchase_order",
+      "args": {
+        "po_number": "PO-26108"
+      }
+    },
+    {
+      "answer": {
+        "price_variance_explanation": {
+          "explanation": "The wire is billed at 124.00 against the PO price of 118.00 for 25 spools, likely a new vendor price.",
+          "evidence": [
+            "po_line:PO-26108:1"
+          ]
+        }
+      }
+    }
+  ]
+}
