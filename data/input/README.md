@@ -1,7 +1,8 @@
 # Input data
 
 What the AP Invoice Copilot works from: the exception list of invoices on
-payment hold, and a mock mailbox of replies to the emails it sends.
+payment hold, a mock mailbox of replies to the emails it sends, and the AP
+operator's scripted review decisions.
 
 **All companies, people, and email addresses in these files are fictional.**
 Emails use the reserved `.example` domain, which can never receive real mail.
@@ -78,3 +79,23 @@ body that contains a comma is double-quoted.
 | `vendor_id` | Vendor on the invoice the reply is about | a `vendor_id` |
 | `invoice_number` | Invoice the reply is about | with `vendor_id`, matches one invoice on the exception list |
 | `body` | Reply text | plain text |
+
+## review_decisions.csv
+
+The AP operator's day-0 review decisions for the scripted demo, read by
+`scripts/review.py --decisions`. Without the file, `review.py` asks for each
+decision in the terminal. One row per invoice that pauses for review.
+
+Format: UTF-8 with no byte-order mark, comma-separated, one header row. A
+reason that contains a comma is double-quoted.
+
+| Column | Meaning | Allowed values / format |
+|---|---|---|
+| `exception_id` | Invoice reviewed | an `exception_id` on the exception list, one row each |
+| `decision` | The operator's decision | `confirm` or `override`; on a possible duplicate, `duplicate` or `not_duplicate` |
+| `reason` | Why | text; required for every decision except `confirm` |
+
+`confirm` lets the drafts go. `override` cancels them and reverses the
+recommendation. On a possible duplicate, `duplicate` sends the duplicate notice
+and cancels the other drafts; `not_duplicate` sends the held drafts and cancels
+the notice.

@@ -43,6 +43,14 @@ class AgentRequest:
 
 
 @dataclass(frozen=True)
+class Fact:
+    findings: tuple[str, ...]  # the findings this fact line supports; an email shows it when it covers one
+    text: str
+    vendor_text: str = ""  # the wording for a vendor email when text names something a vendor must not see
+    email_text: str = ""  # the wording for an email when text is a terse calculation line: every figure labeled
+
+
+@dataclass(frozen=True)
 class Assessment:
     invoice: Invoice
     path: str
@@ -52,6 +60,7 @@ class Assessment:
     gl_account: str
     agent_requests: tuple[AgentRequest, ...]
     facts: tuple[str, ...]
+    fact_records: tuple[Fact, ...] = ()  # the same lines as facts, each with the findings it supports
 
 
 class RuleDataError(Exception):
@@ -62,9 +71,13 @@ class RuleDataError(Exception):
 class _Notes:
     """What the checks record for one invoice while assess() runs."""
     findings: list[str] = field(default_factory=list)
-    facts: list[str] = field(default_factory=list)
+    facts: list[Fact] = field(default_factory=list)
     requests: list[AgentRequest] = field(default_factory=list)
     approval_reason: str = ""
+
+    def fact(self, findings: tuple[str, ...], text: str, vendor_text: str = "", email_text: str = "") -> None:
+        """Record one fact line and the findings it supports."""
+        self.facts.append(Fact(findings, text, vendor_text, email_text))
 
 
 def normalize_invoice_number(number: str) -> str:
@@ -112,8 +125,12 @@ def _exact_duplicate(invoice: Invoice, ref: Reference, notes: _Notes) -> bool:
     for posted in ref.history.get(invoice.vendor_id, ()):
         if posted["invoice_number"] == invoice.invoice_number:
             notes.findings.append("exact_duplicate")
-            notes.facts.append(f"exact duplicate of posted {posted['invoice_number']} "
-                               f"({posted['invoice_date']}, {_money(posted['amount'])})")
+            notes.fact(("exact_duplicate",),
+                       f"exact duplicate of posted {posted['invoice_number']} "
+                       f"({posted['invoice_date']}, {_money(posted['amount'])})",
+                       f"this invoice has the same number as invoice {posted['invoice_number']} dated "
+                       f"{posted['invoice_date']} for {_money(posted['amount'])}, which we have already "
+                       "received and posted")
             return True
     return False
 
@@ -136,26 +153,29 @@ def _duplicate_candidates(invoice: Invoice, ref: Reference, notes: _Notes) -> No
             same_number.append(posted["invoice_number"])
         if matches:
             candidates.append(posted["invoice_number"])
-            notes.facts.append(f"duplicate candidate: posted {posted['invoice_number']} "
-                               f"({posted['invoice_date']}, {_money(posted['amount'])}): "
-                               f"{', '.join(matches)}")
+            notes.fact(("possible_duplicate",),
+                       f"duplicate candidate: posted {posted['invoice_number']} "
+                       f"({posted['invoice_date']}, {_money(posted['amount'])}): "
+                       f"{', '.join(matches)}")
     if candidates:
         notes.requests.append(AgentRequest("duplicate_check", tuple(candidates), tuple(same_number)))
 
 
 def _missing_data(invoice: Invoice, vendor: dict[str, str], notes: _Notes) -> None:
     """Check 3: required header fields, the service month where the category needs one, and the header total."""
-    problems = [f"{name} is blank" for name in ("invoice_number", "invoice_date", "amount")
+    problems = [(f"{name} is blank", f"the {label} is missing")
+                for name, label in (("invoice_number", "invoice number"), ("invoice_date", "invoice date"),
+                                    ("amount", "invoice total"))
                 if getattr(invoice, name) in ("", None)]
     if vendor["category"] in SERVICE_MONTH_REQUIRED and not invoice.service_month:
-        problems.append(f"service_month is blank on a {vendor['category']} bill")
+        problems.append((f"service_month is blank on a {vendor['category']} bill", "the service month is missing"))
     lines_total = _lines_total(invoice)
     if invoice.amount is not None and invoice.amount != lines_total:
-        problems.append(f"header amount {_money(invoice.amount)} does not equal the lines total "
-                        f"{_money(lines_total)}")
-    for problem in problems:
+        problems.append((f"header amount {_money(invoice.amount)} does not equal the lines total "
+                         f"{_money(lines_total)}", ""))
+    for problem, vendor_text in problems:
         notes.findings.append("missing_data")
-        notes.facts.append(problem)
+        notes.fact(("missing_data",), problem, vendor_text)
 
 
 def _path(invoice: Invoice, vendor: dict[str, str]) -> str:
@@ -179,7 +199,8 @@ def _missing_po(invoice: Invoice, notes: _Notes) -> bool:
     if invoice.po_number:
         return False
     notes.findings.append("missing_po")
-    notes.facts.append("no PO number on an inventory vendor's invoice")
+    notes.fact(("missing_po",), "no PO number on an inventory vendor's invoice",
+               "this invoice quotes no purchase order number")
     notes.requests.append(AgentRequest("po_match"))
     return True
 
@@ -187,16 +208,18 @@ def _missing_po(invoice: Invoice, notes: _Notes) -> bool:
 def _invalid_po(invoice: Invoice, ref: Reference, notes: _Notes) -> bool:
     """PO check 2: the PO is not on file, is closed, or belongs to another vendor. True stops the PO checks."""
     po = ref.purchase_orders.get(invoice.po_number)
+    vendor_text = ""
     if po is None:
         problem = f"{invoice.po_number} is not on file"
     elif po["status"] == "closed":
         problem = f"{invoice.po_number} is closed"
     elif po["vendor_id"] != invoice.vendor_id:
         problem = f"{invoice.po_number} belongs to {po['vendor_id']}, not {invoice.vendor_id}"
+        vendor_text = f"{invoice.po_number} was not issued to {invoice.vendor_name}"
     else:
         return False
     notes.findings.append("invalid_po")
-    notes.facts.append(problem)
+    notes.fact(("invalid_po",), problem, vendor_text)
     notes.requests.append(AgentRequest("po_match"))
     return True
 
@@ -208,7 +231,7 @@ def _match_lines(invoice: Invoice, ref: Reference, notes: _Notes) -> list[tuple[
         po_line = ref.po_lines.get((invoice.po_number, line.po_line))
         if po_line is None or po_line["item"] != line.item:
             notes.findings.append("missing_data")
-            notes.facts.append(f"line {line.line} does not match a line on {invoice.po_number}")
+            notes.fact(("missing_data",), f"line {line.line} does not match a line on {invoice.po_number}")
         else:
             matched.append((line, po_line))
     return matched
@@ -219,14 +242,21 @@ def _tolerance(invoice: Invoice, ref: Reference, matched: list[tuple[InvoiceLine
     """PO check 4: price and quantity variances on the matched lines, each tested on its own against the limit."""
     amount = _working_amount(invoice)
     limit = tolerance_limit(amount)
-    notes.facts.append(f"tolerance limit {_money(limit)}: {_percent(TOLERANCE_RATE)} of {_money(amount)} "
-                       f"is {_money(amount * TOLERANCE_RATE)}, cap {_money(TOLERANCE_CAP)}")
+    notes.fact(BUYER_FINDINGS,
+               f"tolerance limit {_money(limit)}: {_percent(TOLERANCE_RATE)} of {_money(amount)} "
+               f"is {_money(amount * TOLERANCE_RATE)}, cap {_money(TOLERANCE_CAP)}",
+               email_text=f"tolerance limit {_money(limit)} in dollars: the lower of {_percent(TOLERANCE_RATE)} of "
+                          f"the invoice amount {_money(amount)} ({_money(amount * TOLERANCE_RATE)}) and the cap "
+                          f"{_money(TOLERANCE_CAP)}")
     totals = (("price_variance", _price_variance(matched, notes)),
               ("quantity_variance", _quantity_variance(invoice.po_number, ref, matched, notes)))
     for finding, total in totals:
         over = total > limit
-        notes.facts.append(f"{finding.replace('_', ' ')} {_money(total)}: {'over' if over else 'within'} "
-                           f"the limit {_money(limit)}")
+        notes.fact((finding,),
+                   f"{finding.replace('_', ' ')} {_money(total)}: {'over' if over else 'within'} "
+                   f"the limit {_money(limit)}",
+                   email_text=f"total {finding.replace('_', ' ')} {_money(total)} in dollars: "
+                              f"{'over' if over else 'within'} the tolerance limit {_money(limit)}")
         if over:
             notes.findings.append(finding)
 
@@ -239,8 +269,13 @@ def _price_variance(matched: list[tuple[InvoiceLine, dict[str, str]]], notes: _N
         if line.unit_price != po_price:
             value = abs(line.unit_price - po_price) * line.quantity
             total += value
-            notes.facts.append(f"line {line.line} {line.item}: price {_money(line.unit_price)} vs PO "
-                               f"{_money(po_price)} x {line.quantity} = {_money(value)}")
+            notes.fact(("price_variance",),
+                       f"line {line.line} {line.item}: price {_money(line.unit_price)} vs PO "
+                       f"{_money(po_price)} x {line.quantity} = {_money(value)}",
+                       email_text=f"line {line.line} {line.item}: invoice unit price {_money(line.unit_price)}, "
+                                  f"PO unit price {_money(po_price)}, a difference of "
+                                  f"{_money(abs(line.unit_price - po_price))} per unit on {line.quantity} units "
+                                  f"billed: price variance {_money(value)} in dollars")
     return total
 
 
@@ -255,8 +290,12 @@ def _quantity_variance(po_number: str, ref: Reference, matched: list[tuple[Invoi
             po_price = Decimal(po_line["unit_price"])
             value = short * po_price
             total += value
-            notes.facts.append(f"line {line.line} {line.item}: billed {line.quantity}, received {received}, "
-                               f"short {short} x PO price {_money(po_price)} = {_money(value)}")
+            notes.fact(("quantity_variance",),
+                       f"line {line.line} {line.item}: billed {line.quantity}, received {received}, "
+                       f"short {short} x PO price {_money(po_price)} = {_money(value)}",
+                       email_text=f"line {line.line} {line.item}: {line.quantity} units billed, {received} "
+                                  f"received, {short} not received; at the PO unit price {_money(po_price)} the "
+                                  f"units not received are a quantity variance of {_money(value)} in dollars")
     return total
 
 
@@ -282,7 +321,7 @@ def _non_po_checks(invoice: Invoice, ref: Reference, vendor: dict[str, str], not
 def _no_category(notes: _Notes) -> None:
     """Blank category: AP sets one; the agent suggests it. No other rule and no GL."""
     notes.findings.append("no_category")
-    notes.facts.append("vendor has no category: AP sets one")
+    notes.fact(("no_category",), "vendor has no category: AP sets one")
     notes.requests.append(AgentRequest("category_suggestion"))
 
 
@@ -293,7 +332,8 @@ def _utilities(invoice: Invoice, ref: Reference, notes: _Notes) -> None:
     bill = len(prior) + 1
     if bill <= NEW_VENDOR_BILLS:
         notes.approval_reason = "utilities_first_3_bills"
-        notes.facts.append(f"bill {bill} from this vendor: the first {NEW_VENDOR_BILLS} bills always need approval")
+        notes.fact(("approval_required",),
+                   f"bill {bill} from this vendor: the first {NEW_VENDOR_BILLS} bills always need approval")
     else:
         baseline = prior[-BASELINE_BILLS:]
         average = (sum((Decimal(b["amount"]) for b in baseline), Decimal("0")) / len(baseline)).quantize(
@@ -303,9 +343,10 @@ def _utilities(invoice: Invoice, ref: Reference, notes: _Notes) -> None:
         over = abs(amount - average) > average * UTILITY_VARIANCE_RATE
         if over:
             notes.approval_reason = "utilities_over_10pct"
-        notes.facts.append(f"bill {bill}: average of the last {len(baseline)} bills is {_money(average)}; "
-                           f"{_money(amount)} is {percent:+f}%, {'over' if over else 'within'} "
-                           f"{_percent(UTILITY_VARIANCE_RATE)}")
+        notes.fact(("approval_required",),
+                   f"bill {bill}: average of the last {len(baseline)} bills is {_money(average)}; "
+                   f"{_money(amount)} is {percent:+f}%, {'over' if over else 'within'} "
+                   f"{_percent(UTILITY_VARIANCE_RATE)}")
     notes.requests.append(AgentRequest("content_check"))
 
 
@@ -314,7 +355,7 @@ def _rent(invoice: Invoice, vendor: dict[str, str], notes: _Notes) -> None:
     lease = Decimal(vendor["lease_amount"])
     amount = _working_amount(invoice)
     difference = amount - lease
-    notes.facts.append(f"lease {_money(lease)}, billed {_money(amount)}, difference {_money(difference)}")
+    notes.fact(("approval_required",), f"lease {_money(lease)}, billed {_money(amount)}, difference {_money(difference)}")
     if difference:
         notes.approval_reason = "rent_differs"
         notes.requests.append(AgentRequest("content_check"))
@@ -323,13 +364,13 @@ def _rent(invoice: Invoice, vendor: dict[str, str], notes: _Notes) -> None:
 def _taxes(notes: _Notes) -> None:
     """Taxes always need approval; no agent check."""
     notes.approval_reason = "taxes"
-    notes.facts.append("taxes always need approval")
+    notes.fact(("approval_required",), "taxes always need approval")
 
 
 def _subscriptions(notes: _Notes) -> None:
     """Subscriptions always need approval; the agent checks the content."""
     notes.approval_reason = "subscriptions"
-    notes.facts.append("subscriptions always need approval")
+    notes.fact(("approval_required",), "subscriptions always need approval")
     notes.requests.append(AgentRequest("content_check"))
 
 
@@ -337,11 +378,12 @@ def _professional_services(invoice: Invoice, notes: _Notes) -> None:
     """Services need a requester: confirmation, then approval. With no requester, AP finds one first."""
     if not invoice.requester_id:
         notes.findings.append("no_requester")
-        notes.facts.append("no requester on a professional services invoice: AP finds one")
+        notes.fact(("no_requester",), "no requester on a professional services invoice: AP finds one")
         return
     notes.findings.append("confirmation_required")
     notes.approval_reason = "professional_services"
-    notes.facts.append("professional services need a requester confirmation, then approval")
+    notes.fact(("confirmation_required", "approval_required"),
+               "professional services need a requester confirmation, then approval")
     notes.requests.append(AgentRequest("content_check"))
 
 
@@ -354,17 +396,18 @@ def _approver(invoice: Invoice, ref: Reference, vendor: dict[str, str], notes: _
         if not manager:
             raise RuleDataError(f"{invoice.exception_id}: requester {owner} owns {cost_center} "
                                 f"and has no manager to approve")
-        notes.facts.append(f"approver {manager}: requester {owner} owns {cost_center}, "
-                           f"so approval goes to their manager")
+        notes.fact(("approval_required",),
+                   f"approver {manager}: requester {owner} owns {cost_center}, "
+                   f"so approval goes to their manager")
         return manager
-    notes.facts.append(f"approver {owner}: owner of {cost_center}")
+    notes.fact(("approval_required",), f"approver {owner}: owner of {cost_center}")
     return owner
 
 
 def _gl_account(ref: Reference, vendor: dict[str, str], notes: _Notes) -> str:
     """The GL account mapped to the vendor's category."""
     account = ref.gl_by_category[vendor["category"]]
-    notes.facts.append(f"GL {account} from category {vendor['category']}")
+    notes.fact(("approval_required",), f"GL {account} from category {vendor['category']}")
     return account
 
 
@@ -401,5 +444,6 @@ def assess(invoice: Invoice, ref: Reference) -> Assessment:
         approver_id=approver_id,
         gl_account=gl_account,
         agent_requests=tuple(requests[kind] for kind in AGENT_REQUEST_KINDS if kind in requests),
-        facts=tuple(notes.facts),
+        facts=tuple(fact.text for fact in notes.facts),
+        fact_records=tuple(notes.facts),
     )

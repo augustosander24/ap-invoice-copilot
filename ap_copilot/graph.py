@@ -1,22 +1,27 @@
-"""The Phase 6 graph for AP Invoice Copilot: one run per PO invoice.
+"""The graph for AP Invoice Copilot: one run per PO invoice.
 
 Code runs every rule; the agent answers only the tasks code gives it; code checks
 every claim against the evidence the agent was shown in this run, and turns the
-accepted answer into verdicts. State is plain data, so the Phase 7 checkpointer
-can save it.
+accepted answer into verdicts. With a communicator, code then drafts the emails, the
+model writes one paragraph for each, and the run pauses for the AP operator's review;
+it resumes from the checkpoint, applies the decision, and logs it once. State is plain
+data, so the checkpointer can save it.
 """
 
 import json
 from typing import TypedDict
 
 from langgraph.graph import END, START, StateGraph
+from langgraph.types import interrupt
 
 from ap_copilot.data import Invoice, Reference
+from ap_copilot.emails import EXPORT_DATE, draft_emails, write_paragraph
 from ap_copilot.evidence import check_answer, fallback, numbers_in
 from ap_copilot.investigator import (ANSWER_SYSTEM_PROMPT, STEP_SYSTEM_PROMPT, answer_message,
                                      answer_schema, candidates_of, parse_answer, po_tasks, shown_text,
                                      step_message)
-from ap_copilot.routing import Verdicts, finalize
+from ap_copilot.review import apply_decision, decision_problems, final_recommendation, review_packet
+from ap_copilot.routing import Verdicts, finalize, outcome_dict
 from ap_copilot.rules import assess
 from ap_copilot.tools import PO_TOOL_SPECS, TOOL_KINDS, evidence_ids, known_arguments, run_tool
 
@@ -29,7 +34,7 @@ class PoState(TypedDict, total=False):
     path: str
     findings: list[str]
     tasks: list[str]
-    status: str  # investigating, retry, accepted, finalized, non_po_not_built
+    status: str  # investigating, retry, accepted, finalized, non_po_not_built, drafted, awaiting_review, reviewed
     transcript: list[dict]  # attempt, step, prompt (the user message sent), reply (the model's message)
     pending: list[dict]  # the tool calls of the last tool step, not run yet
     stalled: bool  # the last tool step only repeated earlier lookups
@@ -44,6 +49,12 @@ class PoState(TypedDict, total=False):
     accepted: dict
     fallbacks: list[str]
     outcome: dict
+    as_of: str  # the demo date of this run, YYYY-MM-DD
+    emails: list[dict]
+    writer_calls: list[dict]  # email_id, prompt, reply, problems, seconds, prompt_tokens, output_tokens
+    review: dict  # decision, reason
+    final_recommendation: str
+    logged: list[str]  # entry IDs written
 
 
 def _model_call(attempt: int, step: str, reply: dict) -> dict:
@@ -69,26 +80,13 @@ def _call_key(name: str, args: dict) -> str:
     return json.dumps([name, known_arguments(name, args)], sort_keys=True)
 
 
-def _outcome_dict(outcome) -> dict:
-    """routing.finalize()'s Outcome as plain data."""
-    return {
-        "path": outcome.path,
-        "findings": list(outcome.findings),
-        "approval_reason": outcome.approval_reason,
-        "approver_id": outcome.approver_id,
-        "gl_account": outcome.gl_account,
-        "recommendation": outcome.recommendation,
-        "actions": [{"recipient_id": action.recipient_id, "role": action.role,
-                     "findings": list(action.findings), "status": action.status,
-                     "after": action.after, "reminder_cc": action.reminder_cc,
-                     "escalation_to": action.escalation_to}
-                    for action in outcome.actions],
-        "facts": list(outcome.facts),
-    }
+def build_graph(ref: Reference, invoices: dict[str, Invoice], client, writer=None, checkpointer=None, log=None):
+    """The compiled graph. client has chat(messages, tools=None, schema=None), as OllamaClient does.
 
-
-def build_graph(ref: Reference, invoices: dict[str, Invoice], client):
-    """The compiled graph. client has chat(messages, tools=None, schema=None), as OllamaClient does."""
+    With no writer the graph ends at finalize (the Phase 6 investigator run). With a writer (the
+    communicator) it drafts the emails, pauses for the AP operator's review, applies the decision,
+    and logs it; the pause needs a checkpointer, and the log a DecisionLog.
+    """
 
     def assessment(state: PoState):
         return assess(invoices[state["exception_id"]], ref)
@@ -187,7 +185,51 @@ def build_graph(ref: Reference, invoices: dict[str, Invoice], client):
         duplicate = (state["accepted"]["duplicate_check"]["likely_duplicate"]
                      if "duplicate_check" in state["tasks"] else None)
         outcome = finalize(a, ref, Verdicts(duplicate=duplicate))
-        return {"status": "finalized", "outcome": _outcome_dict(outcome)}
+        return {"status": "finalized", "outcome": outcome_dict(outcome)}
+
+    def draft_node(state: PoState) -> dict:
+        emails = draft_emails(assessment(state), state["outcome"], state.get("accepted", {}), ref,
+                              state.get("as_of", EXPORT_DATE))
+        return {"emails": emails, "writer_calls": [], "status": "drafted"}
+
+    def write_node(state: PoState) -> dict:
+        emails, calls = [], []
+        for email in state["emails"]:
+            written, call = write_paragraph(email, writer, ref)
+            emails.append(written)
+            calls.append(call)
+        return {"emails": emails, "writer_calls": state["writer_calls"] + calls, "status": "awaiting_review"}
+
+    def review_node(state: PoState) -> dict:
+        # interrupt() pauses the run here; on resume LangGraph reruns this node from the top and
+        # interrupt() returns the operator's decision, so nothing before it may have side effects.
+        # A bad decision is asked again and never reaches the state (raising instead leaves it
+        # stuck on the thread).
+        packet = review_packet(state)
+        decision = interrupt(packet)
+        problems = decision_problems(state, decision)
+        while problems:
+            decision = interrupt({**packet, "problems": problems})
+            problems = decision_problems(state, decision)
+        return {"review": {"decision": decision["decision"], "reason": str(decision.get("reason") or "").strip()}}
+
+    def apply_review_node(state: PoState) -> dict:
+        decision = state["review"]["decision"]
+        return {"emails": apply_decision(state["emails"], decision, state.get("as_of", EXPORT_DATE)),
+                "final_recommendation": final_recommendation(state, decision), "status": "reviewed"}
+
+    def log_review_node(state: PoState) -> dict:
+        # Its own node after the pause, so the entry is written once (design section 12).
+        as_of = state.get("as_of", EXPORT_DATE)
+        entry_id = f"{state['exception_id']}:{as_of}:review"
+        entry = {"entry_id": entry_id, "exception_id": state["exception_id"], "as_of": as_of, "event": "review",
+                 "recommendation": state["outcome"]["recommendation"], "findings": state["outcome"]["findings"],
+                 "decision": state["review"]["decision"], "reason": state["review"]["reason"],
+                 "final_recommendation": state["final_recommendation"],
+                 "emails": [{"email_id": email["email_id"], "status": email["status"],
+                             "paragraph_source": email["paragraph_source"]} for email in state["emails"]]}
+        log.write(entry)
+        return {"logged": state.get("logged", []) + [entry_id]}
 
     def after_assess(state: PoState) -> str:
         if state["status"] == "non_po_not_built":
@@ -216,5 +258,18 @@ def build_graph(ref: Reference, invoices: dict[str, Invoice], client):
     builder.add_conditional_edges("run_tools", after_run_tools, ["answer", "investigate"])
     builder.add_edge("answer", "evidence_check")
     builder.add_conditional_edges("evidence_check", after_evidence_check, ["finalize", "investigate"])
-    builder.add_edge("finalize", END)
-    return builder.compile()
+    if writer is None:
+        builder.add_edge("finalize", END)
+    else:
+        builder.add_node("draft", draft_node)
+        builder.add_node("write", write_node)
+        builder.add_node("review", review_node)
+        builder.add_node("apply_review", apply_review_node)
+        builder.add_node("log_review", log_review_node)
+        builder.add_edge("finalize", "draft")
+        builder.add_edge("draft", "write")
+        builder.add_edge("write", "review")
+        builder.add_edge("review", "apply_review")
+        builder.add_edge("apply_review", "log_review")
+        builder.add_edge("log_review", END)
+    return builder.compile(checkpointer=checkpointer)

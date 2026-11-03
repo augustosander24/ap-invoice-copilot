@@ -8,7 +8,7 @@ recipient with its follow-up contacts. Code decides all of it; no model runs her
 from dataclasses import dataclass
 
 from ap_copilot.data import Reference
-from ap_copilot.rules import AP_MANAGER, AP_QUEUE_FINDINGS, AP_TEAM, BUYER_FINDINGS, FINDINGS, VENDOR_FINDINGS, Assessment
+from ap_copilot.rules import AP_MANAGER, AP_QUEUE_FINDINGS, AP_TEAM, BUYER_FINDINGS, FINDINGS, VENDOR_FINDINGS, Assessment, Fact
 
 
 @dataclass(frozen=True)
@@ -39,6 +39,7 @@ class Outcome:
     recommendation: str
     actions: tuple[Action, ...]
     facts: tuple[str, ...]
+    fact_records: tuple[Fact, ...] = ()
 
 
 _VERDICTS = (("duplicate", "duplicate_check"), ("mismatch", "content_check"))
@@ -56,26 +57,26 @@ def _check_verdicts(assessment: Assessment, verdicts: Verdicts) -> None:
             raise ValueError(f"{exception_id}: verdicts.{name} was given but {kind} was not requested")
 
 
-def _apply_verdicts(assessment: Assessment, verdicts: Verdicts) -> tuple[tuple[str, ...], tuple[str, ...]]:
+def _apply_verdicts(assessment: Assessment, verdicts: Verdicts) -> tuple[tuple[str, ...], tuple[Fact, ...]]:
     """The assessment's findings and facts, plus the agent findings, in canonical order.
 
     A yes adds the agent finding. A duplicate candidate with the same invoice number once
     normalized is a possible duplicate even on a no: the agent can't clear it, AP decides.
     """
     findings = set(assessment.findings)
-    facts = list(assessment.facts)
+    facts = list(assessment.fact_records)
     same_number = next((request.same_number for request in assessment.agent_requests
                         if request.kind == "duplicate_check"), ())
     if verdicts.duplicate is True:
         findings.add("possible_duplicate")
-        facts.append("agent verdict: likely duplicate")
+        facts.append(Fact(("possible_duplicate",), "agent verdict: likely duplicate"))
     elif same_number:
         findings.add("possible_duplicate")
-        facts.append(f"agent verdict: not a duplicate; AP reviews it anyway, because posted "
-                     f"{', '.join(same_number)} has the same invoice number once normalized")
+        facts.append(Fact(("possible_duplicate",), f"agent verdict: not a duplicate; AP reviews it anyway, because "
+                          f"posted {', '.join(same_number)} has the same invoice number once normalized"))
     if verdicts.mismatch is True:
         findings.add("category_mismatch")
-        facts.append("agent verdict: content doesn't fit the category")
+        facts.append(Fact(("category_mismatch",), "agent verdict: content doesn't fit the category"))
     return tuple(finding for finding in FINDINGS if finding in findings), tuple(facts)
 
 
@@ -144,5 +145,26 @@ def finalize(assessment: Assessment, ref: Reference, verdicts: Verdicts) -> Outc
         gl_account=assessment.gl_account,
         recommendation="hold" if findings else "release",
         actions=_actions(assessment, ref, findings),
-        facts=facts,
+        facts=tuple(fact.text for fact in facts),
+        fact_records=facts,
     )
+
+
+def outcome_dict(outcome: Outcome) -> dict:
+    """An Outcome as plain data, for graph state and run files."""
+    return {
+        "path": outcome.path,
+        "findings": list(outcome.findings),
+        "approval_reason": outcome.approval_reason,
+        "approver_id": outcome.approver_id,
+        "gl_account": outcome.gl_account,
+        "recommendation": outcome.recommendation,
+        "actions": [{"recipient_id": action.recipient_id, "role": action.role,
+                     "findings": list(action.findings), "status": action.status,
+                     "after": action.after, "reminder_cc": action.reminder_cc,
+                     "escalation_to": action.escalation_to}
+                    for action in outcome.actions],
+        "facts": list(outcome.facts),
+        "fact_records": [{"findings": list(fact.findings), "text": fact.text, "vendor_text": fact.vendor_text,
+                          "email_text": fact.email_text} for fact in outcome.fact_records],
+    }

@@ -1,0 +1,11 @@
+exception_id,decision,reason
+EX-001,confirm,
+EX-002,confirm,
+EX-003,confirm,
+EX-004,confirm,
+EX-005,confirm,
+EX-006,confirm,
+EX-007,confirm,
+EX-008,duplicate,"Same vendor, PO, date, and amount as posted invoice 008817, which already billed PO-26105 in full; resent with the leading zeros dropped."
+EX-009,confirm,
+EX-010,confirm,
