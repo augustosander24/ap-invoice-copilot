@@ -96,6 +96,7 @@ reason that contains a comma is double-quoted.
 | `reason` | Why | text; required for every decision except `confirm` |
 
 `confirm` lets the drafts go. `override` cancels them and reverses the
-recommendation. On a possible duplicate, `duplicate` sends the duplicate notice
-and cancels the other drafts; `not_duplicate` sends the held drafts and cancels
-the notice.
+recommendation, except that a non-PO invoice is never released by an override:
+it stays on hold with AP. On a possible duplicate, `duplicate` sends the
+duplicate notice and cancels the other drafts; `not_duplicate` sends the held
+drafts and cancels the notice.

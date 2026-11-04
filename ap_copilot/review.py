@@ -16,11 +16,19 @@ def allowed_decisions(state: dict) -> tuple[str, ...]:
 
 
 def ap_items(outcome: dict, accepted: dict) -> list[str]:
-    """What AP sees for its own queue: the AP-queue fact lines, then the investigator's duplicate reason."""
+    """What AP sees for its own queue: the AP-queue fact lines, then the investigator's duplicate reason,
+    content check, and category suggestion."""
     items = [record["text"] for record in outcome["fact_records"]
              if any(finding in AP_QUEUE_FINDINGS for finding in record["findings"])]
     if "duplicate_check" in accepted:
         items.append(f"agent reason: {accepted['duplicate_check']['reason']}")
+    if "content_check" in accepted:
+        claim = accepted["content_check"]
+        items.append(f"agent content check: {'does not fit' if claim['mismatch'] else 'fits'} "
+                     f"the vendor's category: {claim['reason']}")
+    if "category_suggestion" in accepted:
+        claim = accepted["category_suggestion"]
+        items.append(f"agent category suggestion: {claim['category'] or 'none'}: {claim['reason']}")
     return items
 
 
@@ -49,9 +57,12 @@ def decision_problems(state: dict, decision) -> list[str]:
 
 
 def final_recommendation(state: dict, decision: str) -> str:
-    """The recommendation after the review: an override reverses it, and clearing a duplicate drops that hold."""
+    """The recommendation after the review: an override reverses it, except that a non-PO invoice is never
+    released by an override (it stays on hold with AP); clearing a duplicate drops that hold."""
     outcome = state["outcome"]
     if decision == "override":
+        if outcome["path"] == "non_po":
+            return "hold"
         return "release" if outcome["recommendation"] == "hold" else "hold"
     if decision == "not_duplicate":
         return "hold" if any(finding != "possible_duplicate" for finding in outcome["findings"]) else "release"

@@ -1,11 +1,12 @@
-"""The graph for AP Invoice Copilot: one run per PO invoice.
+"""The graph for AP Invoice Copilot: one run per invoice.
 
-Code runs every rule; the agent answers only the tasks code gives it; code checks
-every claim against the evidence the agent was shown in this run, and turns the
-accepted answer into verdicts. With a communicator, code then drafts the emails, the
-model writes one paragraph for each, and the run pauses for the AP operator's review;
-it resumes from the checkpoint, applies the decision, and logs it once. State is plain
-data, so the checkpointer can save it.
+Code runs every rule and picks the investigator by path (PO or non-PO); the agent
+answers only the tasks code gives it; code checks every claim against the evidence
+the agent was shown in this run, and turns the accepted answer into verdicts. With a
+communicator, code then drafts the emails, the model writes one paragraph for each,
+and the run pauses for the AP operator's review; it resumes from the checkpoint,
+applies the decision, and logs it once. State is plain data, so the checkpointer can
+save it.
 """
 
 import json
@@ -17,13 +18,12 @@ from langgraph.types import interrupt
 from ap_copilot.data import Invoice, Reference
 from ap_copilot.emails import EXPORT_DATE, draft_emails, write_paragraph
 from ap_copilot.evidence import check_answer, fallback, numbers_in
-from ap_copilot.investigator import (ANSWER_SYSTEM_PROMPT, STEP_SYSTEM_PROMPT, answer_message,
-                                     answer_schema, candidates_of, parse_answer, po_tasks, shown_text,
-                                     step_message)
+from ap_copilot import investigator as po, nonpo_investigator as nonpo
+from ap_copilot.investigator import candidates_of
 from ap_copilot.review import apply_decision, decision_problems, final_recommendation, review_packet
 from ap_copilot.routing import Verdicts, finalize, outcome_dict
 from ap_copilot.rules import assess
-from ap_copilot.tools import PO_TOOL_SPECS, TOOL_KINDS, evidence_ids, known_arguments, run_tool
+from ap_copilot.tools import NONPO_TOOL_SPECS, PO_TOOL_SPECS, TOOL_KINDS, evidence_ids, known_arguments, run_tool
 
 MAX_TOOL_CALLS = 6  # per attempt
 MAX_ATTEMPTS = 3  # the first answer plus 2 retries
@@ -34,7 +34,7 @@ class PoState(TypedDict, total=False):
     path: str
     findings: list[str]
     tasks: list[str]
-    status: str  # investigating, retry, accepted, finalized, non_po_not_built, drafted, awaiting_review, reviewed
+    status: str  # investigating, retry, accepted, finalized, drafted, awaiting_review, reviewed
     transcript: list[dict]  # attempt, step, prompt (the user message sent), reply (the model's message)
     pending: list[dict]  # the tool calls of the last tool step, not run yet
     stalled: bool  # the last tool step only repeated earlier lookups
@@ -91,22 +91,57 @@ def build_graph(ref: Reference, invoices: dict[str, Invoice], client, writer=Non
     def assessment(state: PoState):
         return assess(invoices[state["exception_id"]], ref)
 
+    def category(state: PoState) -> str:
+        """The vendor's category, from the vendor master."""
+        return ref.vendors[invoices[state["exception_id"]].vendor_id]["category"]
+
+    def step_prompt(state: PoState, a) -> tuple[str, str, list[dict]]:
+        """The system prompt, the user message, and the tools of one tool step, for the invoice's path."""
+        tasks = tuple(state["tasks"])
+        if state["path"] == "po":
+            return (po.STEP_SYSTEM_PROMPT, po.step_message(a, tasks, state["tool_calls"], state["reasons"]),
+                    PO_TOOL_SPECS)
+        return (nonpo.STEP_SYSTEM_PROMPT,
+                nonpo.step_message(a, category(state), tasks, state["tool_calls"], state["reasons"]),
+                NONPO_TOOL_SPECS)
+
+    def answer_prompt(state: PoState, a) -> tuple[str, str]:
+        """The system prompt and the user message of the answer step, for the invoice's path."""
+        tasks = tuple(state["tasks"])
+        if state["path"] == "po":
+            return po.ANSWER_SYSTEM_PROMPT, po.answer_message(a, tasks, state["tool_calls"], state["reasons"])
+        return (nonpo.ANSWER_SYSTEM_PROMPT,
+                nonpo.answer_message(a, category(state), tasks, state["tool_calls"], state["reasons"]))
+
+    def module(state: PoState):
+        """The investigator module for the invoice's path."""
+        return po if state["path"] == "po" else nonpo
+
+    def first_step(state: PoState) -> str:
+        """Where the investigator starts: the tool steps, or the answer when no task needs a lookup."""
+        if state["path"] == "non_po" and not nonpo.needs_lookups(tuple(state["tasks"])):
+            return "answer"
+        return "investigate"
+
     def assess_node(state: PoState) -> dict:
         a = assessment(state)
         update = {"path": a.path, "findings": list(a.findings), "tool_calls": [], "model_calls": [],
                   "checks": [], "fallbacks": [], "transcript": [], "pending": [], "reasons": []}
-        if a.path == "non_po" and "exact_duplicate" not in a.findings:
-            return {**update, "tasks": [], "status": "non_po_not_built"}
-        tasks = () if "exact_duplicate" in a.findings else po_tasks(a)
+        if "exact_duplicate" in a.findings:
+            tasks = ()
+        elif a.path == "po":
+            tasks = po.po_tasks(a)
+        else:
+            tasks = nonpo.nonpo_tasks(a)
         return {**update, "tasks": list(tasks), "status": "investigating", "attempt": 1,
                 "calls_this_attempt": 0}
 
     def investigate_node(state: PoState) -> dict:
         # One fresh, single-turn tool step: Llama 3.1 8B can't reliably hold a conversation
         # alongside tool definitions, so the history goes in as text, not as chat turns.
-        prompt = step_message(assessment(state), tuple(state["tasks"]), state["tool_calls"], state["reasons"])
-        reply = client.chat([{"role": "system", "content": STEP_SYSTEM_PROMPT},
-                             {"role": "user", "content": prompt}], tools=PO_TOOL_SPECS)
+        system, prompt, tools = step_prompt(state, assessment(state))
+        reply = client.chat([{"role": "system", "content": system},
+                             {"role": "user", "content": prompt}], tools=tools)
         message = dict(reply["message"])
         if not message.get("tool_calls"):
             calls = _text_tool_call(message["content"])
@@ -133,7 +168,7 @@ def build_graph(ref: Reference, invoices: dict[str, Invoice], client, writer=Non
                                    "look up a different record or reply DONE"}
             else:
                 count += 1
-                result = run_tool(ref, name, args)
+                result = run_tool(ref, name, args, state["path"])
                 done.add(_call_key(name, args))
             tool_calls.append({"attempt": state["attempt"], "n": len(tool_calls) + 1, "tool": name,
                                "kind": TOOL_KINDS.get(name, "unknown"), "args": args, "result": result,
@@ -146,11 +181,12 @@ def build_graph(ref: Reference, invoices: dict[str, Invoice], client, writer=Non
     def answer_node(state: PoState) -> dict:
         a = assessment(state)
         tasks = tuple(state["tasks"])
-        prompt = answer_message(a, tasks, state["tool_calls"], state["reasons"])
-        reply = client.chat([{"role": "system", "content": ANSWER_SYSTEM_PROMPT},
-                             {"role": "user", "content": prompt}], schema=answer_schema(tasks))
+        system, prompt = answer_prompt(state, a)
+        investigator = module(state)
+        reply = client.chat([{"role": "system", "content": system},
+                             {"role": "user", "content": prompt}], schema=investigator.answer_schema(tasks))
         try:
-            answer, answer_error = parse_answer(reply["message"]["content"], tasks), ""
+            answer, answer_error = investigator.parse_answer(reply["message"]["content"], tasks), ""
         except ValueError as error:
             answer, answer_error = {}, f"the answer is not valid JSON for the schema: {error}"
         entry = {"attempt": state["attempt"], "step": "answer", "prompt": prompt, "reply": reply["message"]}
@@ -166,7 +202,7 @@ def build_graph(ref: Reference, invoices: dict[str, Invoice], client, writer=Non
             problems = {task: [first_line] for task in tasks}
         else:
             seen = {evidence_id for call in state["tool_calls"] for evidence_id in call["evidence_ids"]}
-            shown = numbers_in(shown_text(a, state["tool_calls"]))
+            shown = numbers_in(module(state).shown_text(a, state["tool_calls"]))
             problems = check_answer(state["answer"], tasks, a.invoice, ref, candidates_of(a), seen, shown)
         failing = {task: found for task, found in problems.items() if found}
         checks = state["checks"] + [{"attempt": state["attempt"], "passed": not failing,
@@ -184,7 +220,9 @@ def build_graph(ref: Reference, invoices: dict[str, Invoice], client, writer=Non
         a = assessment(state)
         duplicate = (state["accepted"]["duplicate_check"]["likely_duplicate"]
                      if "duplicate_check" in state["tasks"] else None)
-        outcome = finalize(a, ref, Verdicts(duplicate=duplicate))
+        mismatch = (state["accepted"]["content_check"]["mismatch"]
+                    if "content_check" in state["tasks"] else None)
+        outcome = finalize(a, ref, Verdicts(duplicate=duplicate, mismatch=mismatch))
         return {"status": "finalized", "outcome": outcome_dict(outcome)}
 
     def draft_node(state: PoState) -> dict:
@@ -232,9 +270,7 @@ def build_graph(ref: Reference, invoices: dict[str, Invoice], client, writer=Non
         return {"logged": state.get("logged", []) + [entry_id]}
 
     def after_assess(state: PoState) -> str:
-        if state["status"] == "non_po_not_built":
-            return END
-        return "investigate" if state["tasks"] else "finalize"
+        return first_step(state) if state["tasks"] else "finalize"
 
     def after_investigate(state: PoState) -> str:
         return "run_tools" if state["pending"] else "answer"
@@ -243,7 +279,7 @@ def build_graph(ref: Reference, invoices: dict[str, Invoice], client, writer=Non
         return "answer" if state["stalled"] or state["calls_this_attempt"] >= MAX_TOOL_CALLS else "investigate"
 
     def after_evidence_check(state: PoState) -> str:
-        return "finalize" if state["status"] == "accepted" else "investigate"
+        return "finalize" if state["status"] == "accepted" else first_step(state)
 
     builder = StateGraph(PoState)
     builder.add_node("assess", assess_node)
@@ -253,11 +289,11 @@ def build_graph(ref: Reference, invoices: dict[str, Invoice], client, writer=Non
     builder.add_node("evidence_check", evidence_check_node)
     builder.add_node("finalize", finalize_node)
     builder.add_edge(START, "assess")
-    builder.add_conditional_edges("assess", after_assess, [END, "investigate", "finalize"])
+    builder.add_conditional_edges("assess", after_assess, ["investigate", "answer", "finalize"])
     builder.add_conditional_edges("investigate", after_investigate, ["run_tools", "answer"])
     builder.add_conditional_edges("run_tools", after_run_tools, ["answer", "investigate"])
     builder.add_edge("answer", "evidence_check")
-    builder.add_conditional_edges("evidence_check", after_evidence_check, ["finalize", "investigate"])
+    builder.add_conditional_edges("evidence_check", after_evidence_check, ["finalize", "investigate", "answer"])
     if writer is None:
         builder.add_edge("finalize", END)
     else:

@@ -1,0 +1,164 @@
+{
+  "EX-011": [
+    {
+      "answer": {
+        "content_check": {
+          "mismatch": false,
+          "reason": "The only line is electric service for November 2026, which is a utility charge.",
+          "evidence": [
+            "invoice_line:EX-011:1"
+          ]
+        }
+      }
+    }
+  ],
+  "EX-012": [
+    {
+      "tool": "get_bill_history",
+      "args": {
+        "vendor_id": "V-2002"
+      }
+    },
+    {
+      "answer": {
+        "content_check": {
+          "mismatch": false,
+          "reason": "The only line is water and sewer service for November 2026, which is a utility charge.",
+          "evidence": [
+            "invoice_line:EX-012:1"
+          ]
+        },
+        "bill_change_explanation": {
+          "explanation": "This bill of 1046.30 is higher than any of the vendor's 14 earlier bills, which ranged from 827.95 to 889.35, and 21.78% above the average of the last 12.",
+          "evidence": [
+            "bill_history:V-2002"
+          ]
+        }
+      }
+    }
+  ],
+  "EX-013": [
+    {
+      "tool": "get_bill_history",
+      "args": {
+        "vendor_id": "V-2003"
+      }
+    },
+    {
+      "answer": {
+        "content_check": {
+          "mismatch": false,
+          "reason": "The only line is waste and recycling collection, which is a utility service.",
+          "evidence": [
+            "invoice_line:EX-013:1"
+          ]
+        },
+        "bill_change_explanation": {
+          "explanation": "This is the vendor's third bill, and 646.20 is in line with its first two bills of 624.50 and 651.75.",
+          "evidence": [
+            "posted:V-2003:GCW-0041",
+            "posted:V-2003:GCW-0042"
+          ]
+        }
+      }
+    }
+  ],
+  "EX-014": [
+    {
+      "tool": "get_vendor",
+      "args": {
+        "vendor_id": "V-3001"
+      }
+    },
+    {
+      "answer": {
+        "content_check": {
+          "mismatch": false,
+          "reason": "Both lines, the warehouse base rent and a late payment fee, are charges from the landlord under the lease.",
+          "evidence": [
+            "invoice_line:EX-014:1",
+            "invoice_line:EX-014:2"
+          ]
+        },
+        "rent_difference_explanation": {
+          "explanation": "Line 1 bills the lease amount of 18500.00, and line 2 adds a late payment fee of 925.00, which is the whole difference.",
+          "evidence": [
+            "vendor:V-3001",
+            "invoice_line:EX-014:2"
+          ]
+        }
+      }
+    }
+  ],
+  "EX-017": [
+    {
+      "answer": {
+        "content_check": {
+          "mismatch": false,
+          "reason": "The only line is the CloudLedger Enterprise plan for November 2026, a software subscription.",
+          "evidence": [
+            "invoice_line:EX-017:1"
+          ]
+        }
+      }
+    }
+  ],
+  "EX-018": [
+    {
+      "answer": {
+        "content_check": {
+          "mismatch": true,
+          "reason": "Line 2 bills 8 rugged handheld barcode scanners for 2960.00, which is hardware, not a subscription.",
+          "evidence": [
+            "invoice_line:EX-018:2"
+          ]
+        }
+      }
+    }
+  ],
+  "EX-019": [
+    {
+      "answer": {
+        "content_check": {
+          "mismatch": false,
+          "reason": "Year-end audit planning is professional accounting work, which fits professional services.",
+          "evidence": [
+            "invoice_line:EX-019:1"
+          ]
+        }
+      }
+    }
+  ],
+  "EX-020": [
+    {
+      "answer": {
+        "content_check": {
+          "mismatch": false,
+          "reason": "The firewall upgrade project is consulting work, which fits professional services.",
+          "evidence": [
+            "invoice_line:EX-020:1"
+          ]
+        }
+      }
+    }
+  ],
+  "EX-022": [
+    {
+      "tool": "get_vendor",
+      "args": {
+        "vendor_id": "V-7001"
+      }
+    },
+    {
+      "answer": {
+        "category_suggestion": {
+          "category": "subscriptions",
+          "reason": "The only line is a digital signage content service billed for November 2026, a recurring service like a subscription.",
+          "evidence": [
+            "invoice_line:EX-022:1"
+          ]
+        }
+      }
+    }
+  ]
+}

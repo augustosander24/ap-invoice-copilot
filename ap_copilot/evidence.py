@@ -12,9 +12,14 @@ from decimal import Decimal
 from ap_copilot.data import Invoice, Reference
 
 TASKS = ("duplicate_check", "po_match", "price_variance_explanation",
-         "quantity_variance_explanation")
+         "quantity_variance_explanation", "content_check", "category_suggestion",
+         "bill_change_explanation", "rent_difference_explanation")
 EXPLANATION_FINDINGS = {"price_variance": "price_variance_explanation",
                         "quantity_variance": "quantity_variance_explanation"}
+APPROVAL_EXPLANATIONS = {"utilities_over_10pct": "bill_change_explanation",
+                         "utilities_first_3_bills": "bill_change_explanation",
+                         "rent_differs": "rent_difference_explanation"}
+CATEGORIES = ("inventory", "utilities", "rent", "taxes", "subscriptions", "professional_services")
 FALLBACK_EXPLANATION = "No explanation passed the evidence check; see the figures from the rules."
 
 MIN_WORDS = 5
@@ -105,6 +110,47 @@ def _quantity_problems(cited: list, invoice: Invoice, ref: Reference) -> list[st
     return [f"cite receipts:{po}, the receipts you looked up"]
 
 
+def _line_problems(cited: list, invoice: Invoice, what: str) -> list[str]:
+    """Must cite at least one line of this invoice."""
+    lines = sorted(invoice_ids(invoice) - {f"invoice:{invoice.exception_id}"})
+    if set(lines) & set(cited):
+        return []
+    return [f"cite {what}: {', '.join(lines)}"]
+
+
+def _content_problems(claim: dict, cited: list, invoice: Invoice) -> list[str]:
+    """A fit is a claim about every line, so it cites every line; a mismatch cites the line that doesn't fit."""
+    if claim.get("mismatch"):
+        return _line_problems(cited, invoice, "the invoice line that does not fit")
+    missing = sorted(invoice_ids(invoice) - {f"invoice:{invoice.exception_id}"} - set(cited))
+    if missing:
+        return [f"cite every invoice line you checked: {', '.join(missing)}"]
+    return []
+
+
+def _category_problems(claim: dict, cited: list, invoice: Invoice) -> list[str]:
+    """The suggestion must be a vendor category, based on the invoice's lines."""
+    category = str(claim.get("category", "")).strip()
+    if category not in CATEGORIES:
+        return [f"{category or 'a blank category'} is not a vendor category; answer one of {', '.join(CATEGORIES)}"]
+    return _line_problems(cited, invoice, "the invoice lines your suggestion is based on")
+
+
+def _history_problems(cited: list, invoice: Invoice, ref: Reference, lease: bool) -> list[str]:
+    """Must cite the vendor's bill history or one of its posted bills; a rent explanation may cite the
+    vendor record, which holds the lease amount, instead."""
+    vendor_id = invoice.vendor_id
+    accepted = ({f"bill_history:{vendor_id}"}
+                | {f"posted:{vendor_id}:{row['invoice_number']}" for row in ref.history.get(vendor_id, ())})
+    if lease:
+        accepted.add(f"vendor:{vendor_id}")
+    if accepted & set(cited):
+        return []
+    if lease:
+        return [f"cite vendor:{vendor_id}, the vendor record with the lease amount, or bill_history:{vendor_id}"]
+    return [f"cite bill_history:{vendor_id}, the bill history you looked up"]
+
+
 def check_answer(answer: dict | None, tasks: tuple[str, ...], invoice: Invoice, ref: Reference,
                  candidates: tuple[str, ...], seen: set[str], shown: set[Decimal]) -> dict[str, list[str]]:
     """Each task's problems: the common checks, then the task's own check. [] means passed."""
@@ -125,6 +171,14 @@ def check_answer(answer: dict | None, tasks: tuple[str, ...], invoice: Invoice, 
             problems += _price_problems(cited, invoice, ref)
         elif task == "quantity_variance_explanation":
             problems += _quantity_problems(cited, invoice, ref)
+        elif task == "content_check":
+            problems += _content_problems(claim, cited, invoice)
+        elif task == "category_suggestion":
+            problems += _category_problems(claim, cited, invoice)
+        elif task == "bill_change_explanation":
+            problems += _history_problems(cited, invoice, ref, lease=False)
+        elif task == "rent_difference_explanation":
+            problems += _history_problems(cited, invoice, ref, lease=True)
         results[task] = problems
     return results
 
@@ -136,4 +190,9 @@ def fallback(task: str) -> dict:
                 "evidence": []}  # an unproven duplicate goes to AP review
     if task == "po_match":
         return {"po_number": "none", "reason": "evidence check failed: no PO suggested", "evidence": []}
+    if task == "content_check":
+        return {"mismatch": True, "reason": "evidence check failed: AP reviews the content",
+                "evidence": []}  # an unproven fit goes to AP review
+    if task == "category_suggestion":
+        return {"category": "", "reason": "evidence check failed: no category suggested", "evidence": []}
     return {"explanation": FALLBACK_EXPLANATION, "evidence": []}

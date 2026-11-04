@@ -59,7 +59,13 @@ WAITING_REPLY_BY = "set when this email is sent, after the service confirmation"
 FALLBACK_PARAGRAPH = "Please see the invoice details and the action requested below."
 
 _EVIDENCE_ID = re.compile(r"\b(po_line|invoice_line|receipts|receipt|po|posted|open_pos|similar_invoices|vendor"
-                          r"|invoice):([A-Za-z0-9-]+)(?::([A-Za-z0-9-]+))?")
+                          r"|invoice|bill_history):([A-Za-z0-9-]+)(?::([A-Za-z0-9-]+))?")
+
+# The investigator's explanations an issue shows, each with its key in the email's facts; the label is in render().
+EXPLANATIONS = {"price_variance": (("price_variance_explanation", "likely_cause"),),
+                "quantity_variance": (("quantity_variance_explanation", "likely_cause"),),
+                "approval_required": (("bill_change_explanation", "from_our_review"),
+                                      ("rent_difference_explanation", "from_our_review"))}
 
 WRITER_SYSTEM_PROMPT = ("You write one short paragraph (2 to 4 sentences) for an accounts payable email to the "
                         "{recipient}. Use only the facts given. Do not add any number, date, or name that is not "
@@ -91,7 +97,8 @@ def readable(text: str) -> str:
     labels = {"po_line": "{first} line {second}", "invoice_line": "invoice line {second}",
               "receipts": "the {first} receipts", "receipt": "receipt {first}", "po": "{first}",
               "posted": "posted invoice {second}", "open_pos": "the open POs",
-              "similar_invoices": "the posted invoices", "vendor": "the vendor record", "invoice": "the invoice"}
+              "similar_invoices": "the posted invoices", "vendor": "the vendor record", "invoice": "the invoice",
+              "bill_history": "the bill history"}
     text = re.sub(r"\s*\(evidence_id [^)]*\)", "", text).replace("evidence_id ", "")
     return _EVIDENCE_ID.sub(lambda match: labels[match.group(1)].format(first=match.group(2),
                                                                        second=match.group(3) or ""), text)
@@ -184,9 +191,10 @@ def _issues(findings: list[str], vendor_facing: bool, outcome: dict, accepted: d
                     wording = record["email_text"] or record["text"]
                     facts.append((record["vendor_text"] or wording) if vendor_facing else wording)
         issue = {"issue": ISSUE_TITLES[finding], "facts": facts}
-        explanation = accepted.get(f"{finding}_explanation", {}).get("explanation", "")
-        if explanation and explanation != FALLBACK_EXPLANATION:
-            issue["likely_cause"] = readable(explanation)
+        for task, key in EXPLANATIONS.get(finding, ()):
+            explanation = accepted.get(task, {}).get("explanation", "")
+            if explanation and explanation != FALLBACK_EXPLANATION:
+                issue[key] = readable(explanation)
         if finding in ("invalid_po", "missing_po"):
             suggestion = _po_suggestion(assessment, accepted, ref)
             if suggestion:
@@ -276,6 +284,8 @@ def render(email: dict) -> str:
         lines += [f"   - {fact}" for fact in issue["facts"]]
         if "likely_cause" in issue:
             lines.append("   Likely cause, from our review: " + issue["likely_cause"])
+        if "from_our_review" in issue:
+            lines.append("   From our review: " + issue["from_our_review"])
         if "possible_po" in issue:
             lines.append(f"   {issue['possible_po']}")
     lines.append("Action requested:")

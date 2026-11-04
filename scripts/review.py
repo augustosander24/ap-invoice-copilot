@@ -1,9 +1,9 @@
 """The AP operator's review: show each paused invoice, take a decision, resume the run.
 
-For each invoice paused in output/phase7/checkpoints.sqlite it prints what the operator
+For each invoice paused in output/phase8/checkpoints.sqlite it prints what the operator
 reviews (recommendation, findings, the AP-queue facts, every draft) and asks for a decision
 and a reason, then resumes the run: the graph applies the decision to the drafts and writes
-one line to output/phase7/decision_log.jsonl. No model runs on resume. An invoice already
+one line to output/phase8/decision_log.jsonl. No model runs on resume. An invoice already
 reviewed is reported and left as it is.
 
     .venv\\Scripts\\python.exe scripts\\review.py
@@ -21,7 +21,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-OUTPUT = ROOT / "output" / "phase7"
+OUTPUT = ROOT / "output" / "phase8"
 # Run as a script, Python puts scripts\ on sys.path, not the project root; add it so ap_copilot imports.
 sys.path.insert(0, str(ROOT))
 
@@ -110,7 +110,7 @@ def main() -> int:
     (OUTPUT / "reviewed.json").write_text(json.dumps(reviewed, indent=2, ensure_ascii=False), encoding="utf-8")
     connection.close()
     print(f"decision log: {len(log.entries())} entries")
-    print("saved output/phase7/reviewed.json")
+    print("saved output/phase8/reviewed.json")
     return 0
 
 

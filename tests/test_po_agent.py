@@ -208,15 +208,15 @@ def test_tool_call_cap():
     assert client.steps == ["tools", "answer"]
 
 
-def test_exact_duplicate_and_non_po_skip_the_agent():
+def test_exact_duplicate_and_a_case_with_no_task_skip_the_agent():
     state, client = run("EX-010", [])
     assert state["status"] == "finalized"
     assert state["outcome"]["findings"] == ["exact_duplicate"]
     assert client.steps == []
 
-    state, client = run("EX-012", [])
-    assert state["status"] == "non_po_not_built"
-    assert "outcome" not in state
+    state, client = run("EX-016", [])  # taxes: a non-PO invoice with no agent task
+    assert state["status"] == "finalized"
+    assert state["outcome"]["findings"] == ["approval_required"]
     assert client.steps == []
 
 

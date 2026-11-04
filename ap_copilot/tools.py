@@ -2,7 +2,8 @@
 
 Each tool reads the Reference and returns a plain dict. Every record and every
 search result carries an evidence_id, so code can check that each agent claim
-points to data the agent was shown. TOOL_KINDS maps tool names to the eval's
+points to data the agent was shown. The PO investigator has five tools and the
+non-PO investigator two. TOOL_KINDS maps tool names to the eval's
 lookup kinds (evals/README.md, first_tool). No model runs in this module.
 """
 
@@ -14,7 +15,7 @@ TOOL_KINDS = {
     "get_goods_receipts": "receipts",
     "find_open_purchase_orders": "open_pos",
     "find_similar_invoices": "similar_invoices",
-    "get_bill_history": "bill_history",  # non-PO investigator; built in Phase 8
+    "get_bill_history": "bill_history",  # non-PO investigator
     "get_vendor": "vendor",
 }
 
@@ -62,6 +63,19 @@ PO_TOOL_SPECS = [
     _spec("get_vendor",
           "Look up a vendor master record: name, category, cost center, and contact.",
           {"vendor_id": "the vendor ID, for example V-1001"},
+          ["vendor_id"]),
+]
+
+NONPO_TOOL_SPECS = [
+    _spec("get_bill_history",
+          "Look up a vendor's posted bills, oldest first: invoice number, date, service month, and "
+          "amount.",
+          {"vendor_id": "the vendor ID, for example V-2001"},
+          ["vendor_id"]),
+    _spec("get_vendor",
+          "Look up a vendor master record: name, category, cost center, contact, and the lease "
+          "amount of a rent vendor.",
+          {"vendor_id": "the vendor ID, for example V-2001"},
           ["vendor_id"]),
 ]
 
@@ -147,6 +161,18 @@ def find_similar_invoices(ref: Reference, vendor_id: str, invoice_number: str,
             "posted_matches": matches}
 
 
+def get_bill_history(ref: Reference, vendor_id: str) -> dict:
+    """The vendor's posted bills, oldest first (by service month, then invoice date), each with its evidence_id."""
+    if vendor_id not in ref.vendors:
+        return _no_vendor(vendor_id)
+    rows = sorted(ref.history.get(vendor_id, ()), key=lambda row: (row["service_month"], row["invoice_date"]))
+    return {"evidence_id": f"bill_history:{vendor_id}", "vendor_id": vendor_id, "bill_count": str(len(rows)),
+            "bills": [{"evidence_id": f"posted:{vendor_id}:{row['invoice_number']}",
+                       "invoice_number": row["invoice_number"], "invoice_date": row["invoice_date"],
+                       "service_month": row["service_month"], "amount": row["amount"]}
+                      for row in rows]}
+
+
 def get_vendor(ref: Reference, vendor_id: str) -> dict:
     """The vendor master row."""
     vendor = ref.vendors.get(vendor_id)
@@ -162,8 +188,13 @@ _PO_TOOLS = {
     "find_similar_invoices": find_similar_invoices,
     "get_vendor": get_vendor,
 }
+_NONPO_TOOLS = {
+    "get_bill_history": get_bill_history,
+    "get_vendor": get_vendor,
+}
+_TOOLS_BY_PATH = {"po": _PO_TOOLS, "non_po": _NONPO_TOOLS}
 _PARAMETERS = {spec["function"]["name"]: tuple(spec["function"]["parameters"]["properties"])
-               for spec in PO_TOOL_SPECS}
+               for spec in PO_TOOL_SPECS + NONPO_TOOL_SPECS}
 
 
 def known_arguments(name: str, args: dict) -> dict:
@@ -171,12 +202,13 @@ def known_arguments(name: str, args: dict) -> dict:
     return {key: str(value) for key, value in args.items() if key in _PARAMETERS.get(name, ())}
 
 
-def run_tool(ref: Reference, name: str, args: dict) -> dict:
-    """Run one PO tool by name. Arguments the tool doesn't take are left out and listed in
-    ignored_arguments; an unknown name or a missing argument returns an error, never raises."""
-    tool = _PO_TOOLS.get(name)
+def run_tool(ref: Reference, name: str, args: dict, path: str = "po") -> dict:
+    """Run one of the path's investigator tools by name. Arguments the tool doesn't take are left out
+    and listed in ignored_arguments; an unknown name or a missing argument returns an error, never raises."""
+    tools = _TOOLS_BY_PATH[path]
+    tool = tools.get(name)
     if tool is None:
-        return {"error": f"unknown tool {name}; use one of: {', '.join(_PO_TOOLS)}"}
+        return {"error": f"unknown tool {name}; use one of: {', '.join(tools)}"}
     try:
         result = tool(ref, **known_arguments(name, args))
     except TypeError as error:
