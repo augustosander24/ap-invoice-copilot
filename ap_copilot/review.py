@@ -1,13 +1,17 @@
-"""The AP operator's review: the packet shown at the pause, the decision rules, and the decision log."""
+"""The AP operator's review: the packet shown at the pause, the decision rules, the operator's edits,
+and the decision log."""
 
 import json
+from copy import deepcopy
 from pathlib import Path
 
-from ap_copilot.emails import REPLY_DAYS, add_business_days, render
+from ap_copilot.emails import REPLY_DAYS, add_business_days, check_paragraph, facts_text, render
 from ap_copilot.rules import AP_QUEUE_FINDINGS
 
 DECISIONS = ("confirm", "override")
 DUPLICATE_RULINGS = ("duplicate", "not_duplicate")
+EDIT_PARTS = ("paragraph", "explanation")
+EXPLANATION_KEYS = ("likely_cause", "from_our_review")
 
 
 def allowed_decisions(state: dict) -> tuple[str, ...]:
@@ -44,8 +48,8 @@ def review_packet(state: dict) -> dict:
             "decisions": list(allowed), "reason_required": [d for d in allowed if d != "confirm"]}
 
 
-def decision_problems(state: dict, decision) -> list[str]:
-    """Why the decision can't be applied; [] when it can."""
+def decision_problems(state: dict, decision, ref=None) -> list[str]:
+    """Why the decision can't be applied; [] when it can. Edits are checked when there are any."""
     if not isinstance(decision, dict):
         return ["the decision must be {'decision': ..., 'reason': ...}"]
     allowed = allowed_decisions(state)
@@ -53,7 +57,68 @@ def decision_problems(state: dict, decision) -> list[str]:
         return [f"decision must be one of {', '.join(allowed)}"]
     if decision["decision"] != "confirm" and not str(decision.get("reason") or "").strip():
         return [f"{decision['decision']} needs a reason"]
-    return []
+    return edit_problems(state, decision, ref) if decision.get("edits") else []
+
+
+def _explanation_key(issue: dict) -> str:
+    """The key of the investigator's explanation an issue shows; "" when it shows none."""
+    return next((key for key in EXPLANATION_KEYS if key in issue), "")
+
+
+def edit_problems(state: dict, decision: dict, ref) -> list[str]:
+    """Why the operator's edits can't be applied: each edits a paragraph or an explanation of an email that
+    goes out with this decision, and passes the same fact check as the communicator's paragraph."""
+    if decision["decision"] == "override":
+        return ["an override cancels every draft, so there is nothing to edit"]
+    emails = {email["email_id"]: email for email in state["emails"]}
+    problems = []
+    for edit in decision["edits"]:
+        email = emails.get(edit.get("email_id"))
+        label = f"edit of {edit.get('email_id')}"
+        if email is None:
+            problems.append(f"{label}: no such draft")
+            continue
+        if email["release_on"] and email["release_on"] != decision["decision"]:
+            problems.append(f"{label}: this decision cancels that draft")
+            continue
+        text = str(edit.get("text") or "").strip()
+        if edit.get("part") not in EDIT_PARTS:
+            problems.append(f"{label}: part must be one of {', '.join(EDIT_PARTS)}")
+            continue
+        if edit["part"] == "explanation":
+            issues = email["facts"]["issues"]
+            number = int(edit.get("issue") or 0)
+            if not 1 <= number <= len(issues) or not _explanation_key(issues[number - 1]):
+                problems.append(f"{label}: issue {number} has no explanation to edit")
+                continue
+        problems += [f"{label} {edit['part']}: {problem}" for problem in check_paragraph(text, facts_text(email), ref)]
+    return problems
+
+
+def apply_edits(emails: list[dict], edits: list[dict]) -> list[dict]:
+    """The emails with the operator's edits: a new paragraph (source "operator") or a new explanation text,
+    each kept with what it replaced."""
+    result = []
+    for email in emails:
+        email = deepcopy(email)
+        for edit in edits:
+            if edit["email_id"] != email["email_id"]:
+                continue
+            text = edit["text"].strip()
+            if edit["part"] == "paragraph":
+                before = email["paragraph"]
+                email.update(paragraph=text, paragraph_source="operator")
+                issue = ""
+            else:
+                issue = int(edit["issue"])
+                target = email["facts"]["issues"][issue - 1]
+                key = _explanation_key(target)
+                before, target[key] = target[key], text
+            email.setdefault("edits", []).append({"part": edit["part"], "issue": issue, "before": before,
+                                                  "after": text})
+        email["body"] = render(email)
+        result.append(email)
+    return result
 
 
 def final_recommendation(state: dict, decision: str) -> str:

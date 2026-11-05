@@ -5,28 +5,37 @@ answers only the tasks code gives it; code checks every claim against the eviden
 the agent was shown in this run, and turns the accepted answer into verdicts. With a
 communicator, code then drafts the emails, the model writes one paragraph for each,
 and the run pauses for the AP operator's review; it resumes from the checkpoint,
-applies the decision, and logs it once. State is plain data, so the checkpointer can
-save it.
+applies the decision, and logs it once. With a reply interpreter and an inbox, every invoice
+with an email out then waits for the next follow-up run: it reads the replies dated up to that
+run's as-of date, the interpreter labels each one, code sends what is due (a waiting approval,
+a reminder, an escalation), the communicator writes the follow-up paragraphs, and the day is
+logged once. State is plain data, so the checkpointer can save it.
 """
 
 import json
+from dataclasses import asdict
+from datetime import date
 from typing import TypedDict
 
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import interrupt
 
 from ap_copilot.data import Invoice, Reference
+from ap_copilot.inbox import Reply
 from ap_copilot.emails import EXPORT_DATE, draft_emails, write_paragraph
 from ap_copilot.evidence import check_answer, fallback, numbers_in
+from ap_copilot.followup import follow_up, invoice_status, match_reply, open_threads, still_open
 from ap_copilot import investigator as po, nonpo_investigator as nonpo
 from ap_copilot.investigator import candidates_of
-from ap_copilot.review import apply_decision, decision_problems, final_recommendation, review_packet
+from ap_copilot.reply_interpreter import interpret, unmatched
+from ap_copilot.review import apply_decision, apply_edits, decision_problems, final_recommendation, review_packet
 from ap_copilot.routing import Verdicts, finalize, outcome_dict
 from ap_copilot.rules import assess
 from ap_copilot.tools import NONPO_TOOL_SPECS, PO_TOOL_SPECS, TOOL_KINDS, evidence_ids, known_arguments, run_tool
 
 MAX_TOOL_CALLS = 6  # per attempt
 MAX_ATTEMPTS = 3  # the first answer plus 2 retries
+REPLY_LOG_FIELDS = ("message_id", "received_date", "email_id", "label", "detail", "reason", "problems", "next_step")
 
 
 class PoState(TypedDict, total=False):
@@ -34,7 +43,7 @@ class PoState(TypedDict, total=False):
     path: str
     findings: list[str]
     tasks: list[str]
-    status: str  # investigating, retry, accepted, finalized, drafted, awaiting_review, reviewed
+    status: str  # investigating, retry, accepted, finalized, drafted, awaiting_review, reviewed, following_up, closed
     transcript: list[dict]  # attempt, step, prompt (the user message sent), reply (the model's message)
     pending: list[dict]  # the tool calls of the last tool step, not run yet
     stalled: bool  # the last tool step only repeated earlier lookups
@@ -52,9 +61,17 @@ class PoState(TypedDict, total=False):
     as_of: str  # the demo date of this run, YYYY-MM-DD
     emails: list[dict]
     writer_calls: list[dict]  # email_id, prompt, reply, problems, seconds, prompt_tokens, output_tokens
-    review: dict  # decision, reason
+    review: dict  # decision, reason, edits
     final_recommendation: str
     logged: list[str]  # entry IDs written
+    threads: list[dict]  # one per email that went out: status, dates, reminder and escalation, replies, outcome
+    replies: list[dict]  # every reply read, with its label, detail, and next step
+    new_replies: list[dict]  # the replies the last run read, not interpreted yet
+    interpreter_calls: list[dict]  # message_id, prompt, reply, problems, seconds, prompt_tokens, output_tokens
+    follow_ups: list[dict]  # the reminders and escalations of the last run, before their paragraphs
+    ap_follow_ups: list[str]  # what the follow-up runs left with AP
+    invoice_status: str  # with_ap, open, awaiting_correction, void, ready_to_release, released
+    day: dict  # the last run: as_of, the emails it sent, its AP items
 
 
 def _model_call(attempt: int, step: str, reply: dict) -> dict:
@@ -80,12 +97,30 @@ def _call_key(name: str, args: dict) -> str:
     return json.dumps([name, known_arguments(name, args)], sort_keys=True)
 
 
-def build_graph(ref: Reference, invoices: dict[str, Invoice], client, writer=None, checkpointer=None, log=None):
+def as_of_problems(state: dict, answer) -> list[str]:
+    """Why a follow-up run can't use this as-of date; [] when it can: a business day after the last run."""
+    if not isinstance(answer, dict):
+        return ["the answer must be {'as_of': 'YYYY-MM-DD'}"]
+    try:
+        day = date.fromisoformat(str(answer.get("as_of")))
+    except ValueError:
+        return ["as_of must be a date, YYYY-MM-DD"]
+    if day.weekday() >= 5:
+        return [f"{day.isoformat()} is not a business day"]
+    if day.isoformat() <= state["as_of"]:
+        return [f"as_of must be after the last run ({state['as_of']})"]
+    return []
+
+
+def build_graph(ref: Reference, invoices: dict[str, Invoice], client, writer=None, checkpointer=None, log=None,
+                interpreter=None, inbox=None):
     """The compiled graph. client has chat(messages, tools=None, schema=None), as OllamaClient does.
 
     With no writer the graph ends at finalize (the Phase 6 investigator run). With a writer (the
     communicator) it drafts the emails, pauses for the AP operator's review, applies the decision,
-    and logs it; the pause needs a checkpointer, and the log a DecisionLog.
+    and logs it; the pause needs a checkpointer, and the log a DecisionLog. With an interpreter
+    (the reply interpreter) and an inbox it then follows up, one run per as-of date, until no
+    thread is open.
     """
 
     def assessment(state: PoState):
@@ -245,15 +280,17 @@ def build_graph(ref: Reference, invoices: dict[str, Invoice], client, writer=Non
         # stuck on the thread).
         packet = review_packet(state)
         decision = interrupt(packet)
-        problems = decision_problems(state, decision)
+        problems = decision_problems(state, decision, ref)
         while problems:
             decision = interrupt({**packet, "problems": problems})
-            problems = decision_problems(state, decision)
-        return {"review": {"decision": decision["decision"], "reason": str(decision.get("reason") or "").strip()}}
+            problems = decision_problems(state, decision, ref)
+        return {"review": {"decision": decision["decision"], "reason": str(decision.get("reason") or "").strip(),
+                           "edits": list(decision.get("edits") or [])}}
 
     def apply_review_node(state: PoState) -> dict:
         decision = state["review"]["decision"]
-        return {"emails": apply_decision(state["emails"], decision, state.get("as_of", EXPORT_DATE)),
+        emails = apply_edits(state["emails"], state["review"].get("edits", []))
+        return {"emails": apply_decision(emails, decision, state.get("as_of", EXPORT_DATE)),
                 "final_recommendation": final_recommendation(state, decision), "status": "reviewed"}
 
     def log_review_node(state: PoState) -> dict:
@@ -265,9 +302,92 @@ def build_graph(ref: Reference, invoices: dict[str, Invoice], client, writer=Non
                  "decision": state["review"]["decision"], "reason": state["review"]["reason"],
                  "final_recommendation": state["final_recommendation"],
                  "emails": [{"email_id": email["email_id"], "status": email["status"],
-                             "paragraph_source": email["paragraph_source"]} for email in state["emails"]]}
+                             "paragraph_source": email["paragraph_source"]} for email in state["emails"]],
+                 "edits": [{"email_id": email["email_id"], **edit} for email in state["emails"]
+                           for edit in email.get("edits", [])]}
         log.write(entry)
         return {"logged": state.get("logged", []) + [entry_id]}
+
+    def open_threads_node(state: PoState) -> dict:
+        threads = open_threads(state["emails"])
+        status = invoice_status(state["final_recommendation"], state["outcome"]["findings"], threads, [])
+        return {"threads": threads, "replies": [], "interpreter_calls": [], "ap_follow_ups": [],
+                "as_of": state.get("as_of", EXPORT_DATE), "invoice_status": status,
+                "status": "following_up" if still_open(threads) else "closed"}
+
+    def wait_node(state: PoState) -> dict:
+        # The pause between follow-up runs: the run resumes with the next as-of date. As in review_node,
+        # nothing before interrupt() may have side effects, and a bad date is asked again.
+        packet = {"exception_id": state["exception_id"], "as_of": state["as_of"],
+                  "invoice_status": state["invoice_status"]}
+        answer = interrupt(packet)
+        problems = as_of_problems(state, answer)
+        while problems:
+            answer = interrupt({**packet, "problems": problems})
+            problems = as_of_problems(state, answer)
+        return {"as_of": answer["as_of"]}
+
+    def read_replies_node(state: PoState) -> dict:
+        invoice = invoices[state["exception_id"]]
+        read = {reply["message_id"] for reply in state["replies"]}
+        new = [reply for reply in inbox.replies(state["as_of"])
+               if (reply.vendor_id, reply.invoice_number) == (invoice.vendor_id, invoice.invoice_number)
+               and reply.message_id not in read]
+        return {"new_replies": [{**asdict(reply), "email_id": match_reply(reply, invoice, state["threads"], ref)}
+                                for reply in new]}
+
+    def interpret_node(state: PoState) -> dict:
+        emails = {email["email_id"]: email for email in state["emails"]}
+        records, calls = [], []
+        for row in state["new_replies"]:
+            reply = Reply(**{key: value for key, value in row.items() if key != "email_id"})
+            if row["email_id"]:
+                record, call = interpret(reply, emails[row["email_id"]], interpreter, ref)
+                calls.append(call)
+            else:  # no model call: AP reads a reply that answers no email we sent
+                record = unmatched(reply)
+            records.append({**record, "as_of": state["as_of"]})
+        return {"new_replies": records, "interpreter_calls": state["interpreter_calls"] + calls}
+
+    def follow_up_node(state: PoState) -> dict:
+        emails, threads, sent, drafts, ap_items, steps = follow_up(state["emails"], state["threads"],
+                                                                   state["new_replies"], state["as_of"], ref)
+        records = [{**record, "next_step": steps[record["message_id"]]} for record in state["new_replies"]]
+        return {"emails": emails, "threads": threads, "follow_ups": drafts, "replies": state["replies"] + records,
+                "ap_follow_ups": state["ap_follow_ups"] + ap_items,
+                "day": {"as_of": state["as_of"], "sent": [email["email_id"] for email in sent + drafts],
+                        "replies": [record["message_id"] for record in records], "ap_items": ap_items}}
+
+    def write_follow_ups_node(state: PoState) -> dict:
+        emails, calls = [], []
+        for email in state["follow_ups"]:
+            written, call = write_paragraph(email, writer, ref)
+            emails.append(written)
+            calls.append(call)
+        status = invoice_status(state["final_recommendation"], state["outcome"]["findings"], state["threads"],
+                                state["ap_follow_ups"])
+        return {"emails": state["emails"] + emails, "writer_calls": state["writer_calls"] + calls, "follow_ups": [],
+                "new_replies": [], "invoice_status": status,
+                "status": "following_up" if still_open(state["threads"]) else "closed"}
+
+    def log_day_node(state: PoState) -> dict:
+        # Its own node after the pause, as log_review: each entry is written once.
+        day, exception_id = state["day"], state["exception_id"]
+        written = []
+        for record in state["replies"]:
+            if record["message_id"] in day["replies"]:
+                written.append(f"{exception_id}:{record['message_id']}:reply")
+                log.write({"entry_id": written[-1], "exception_id": exception_id, "as_of": day["as_of"],
+                           "event": "reply", **{key: record[key] for key in REPLY_LOG_FIELDS}})
+        emails = {email["email_id"]: email for email in state["emails"]}
+        sent = [emails[email_id] for email_id in day["sent"]]
+        written.append(f"{exception_id}:{day['as_of']}:follow_up")
+        log.write({"entry_id": written[-1], "exception_id": exception_id, "as_of": day["as_of"], "event": "follow_up",
+                   "emails": [{"email_id": email["email_id"], "template": email["template"], "to": email["recipient_id"],
+                               "cc": email.get("cc_id", ""), "reply_by": email["reply_by"],
+                               "paragraph_source": email["paragraph_source"]} for email in sent],
+                   "ap_items": day["ap_items"], "invoice_status": state["invoice_status"]})
+        return {"logged": state["logged"] + written}
 
     def after_assess(state: PoState) -> str:
         return first_step(state) if state["tasks"] else "finalize"
@@ -280,6 +400,9 @@ def build_graph(ref: Reference, invoices: dict[str, Invoice], client, writer=Non
 
     def after_evidence_check(state: PoState) -> str:
         return "finalize" if state["status"] == "accepted" else first_step(state)
+
+    def after_follow_up(state: PoState) -> str:
+        return "wait" if state["status"] == "following_up" else END
 
     builder = StateGraph(PoState)
     builder.add_node("assess", assess_node)
@@ -307,5 +430,22 @@ def build_graph(ref: Reference, invoices: dict[str, Invoice], client, writer=Non
         builder.add_edge("write", "review")
         builder.add_edge("review", "apply_review")
         builder.add_edge("apply_review", "log_review")
-        builder.add_edge("log_review", END)
+        if interpreter is None:
+            builder.add_edge("log_review", END)
+        else:
+            builder.add_node("open_threads", open_threads_node)
+            builder.add_node("wait", wait_node)
+            builder.add_node("read_replies", read_replies_node)
+            builder.add_node("interpret", interpret_node)
+            builder.add_node("follow_up", follow_up_node)
+            builder.add_node("write_follow_ups", write_follow_ups_node)
+            builder.add_node("log_day", log_day_node)
+            builder.add_edge("log_review", "open_threads")
+            builder.add_conditional_edges("open_threads", after_follow_up, ["wait", END])
+            builder.add_edge("wait", "read_replies")
+            builder.add_edge("read_replies", "interpret")
+            builder.add_edge("interpret", "follow_up")
+            builder.add_edge("follow_up", "write_follow_ups")
+            builder.add_edge("write_follow_ups", "log_day")
+            builder.add_conditional_edges("log_day", after_follow_up, ["wait", END])
     return builder.compile(checkpointer=checkpointer)

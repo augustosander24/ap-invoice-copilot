@@ -16,8 +16,9 @@ from ap_copilot.rules import AP_MANAGER, AP_TEAM, FINDINGS, Assessment, normaliz
 
 COMPANY = "Northgate Distribution"
 AP_ADDRESS = "ap@northgate.example"
-EXPORT_DATE = "2026-11-30"  # demo day 0; Phase 9 adds the as-of setting
+EXPORT_DATE = "2026-11-30"  # demo day 0; a follow-up run's date is its as_of
 REPLY_DAYS = 3
+FOLLOW_UP_REPLY_DAYS = 1  # a reminder or an escalation is due within 24 hours (one business day)
 
 TEMPLATES = {"buyer": "buyer_query", "vendor": "vendor_correction", "approver": "approval_request",
              "requester": "service_confirmation"}
@@ -28,6 +29,8 @@ SUBJECTS = {
     "duplicate_notice": "Duplicate invoice: {number}",
     "approval_request": "Approval needed: invoice {number} from {vendor}",
     "service_confirmation": "Please confirm the service: invoice {number} from {vendor}",
+    "reminder": "Reminder: {subject}",
+    "escalation": "Escalation: {subject}",
 }
 ISSUE_TITLES = {
     "price_variance": "Price differs from the PO",
@@ -263,6 +266,64 @@ def draft_emails(assessment: Assessment, outcome: dict, accepted: dict, ref, as_
     return emails
 
 
+def follow_up_email(original: dict, kind: str, thread: dict, as_of: str, ref) -> dict:
+    """Template 5: a reminder to the same recipient (cc their manager, or AP Team for a vendor), or an
+    escalation to the manager (the AP Manager for a vendor), who becomes the action owner; a vendor
+    escalation's actions say what to ask the vendor for.
+
+    It carries the original email's facts plus when our email (and our reminder) went out, under
+    names that say whose email and which date; the paragraph is written later, and the reply-by
+    date, one business day out, is template-only.
+    """
+    facts = {key: value for key, value in original["facts"].items() if key != "recipient"}
+    vendor = "vendor" in original["roles"]
+    roles = " and ".join(ROLE_LABELS[role] for role in original["roles"])
+    sent = {"our_email_sent_on": thread["sent_on"], "reply_was_due_on": thread["reply_by"]}
+    if kind == "reminder":
+        to_id, cc_id = original["recipient_id"], thread["reminder_cc"]
+        cc = _recipient(cc_id, ref) if cc_id else None
+        about = {"recipient": original["facts"]["recipient"],
+                 "follow_up": "reminder: we have had no reply to our email", **sent,
+                 "reply_to_this_email_within": "one business day"}
+        if cc:
+            about["in_copy"] = cc["name"] if vendor else f"{cc['name']} (your manager)"
+            writer_recipient = f"{roles} (reminder, {'our AP team' if vendor else 'their manager'} in copy)"
+        else:
+            writer_recipient = f"{roles} (reminder)"
+        line = (f"Reminder: we sent this request on {thread['sent_on']} and asked for a reply by "
+                f"{thread['reply_by']}. We have had no reply yet.")
+    else:
+        to_id, cc_id = thread["escalation_to"], "" if vendor else original["recipient_id"]
+        cc = _recipient(cc_id, ref) if cc_id else None
+        owner = _recipient(to_id, ref)["name"]
+        first_to = f"{original['to_name']} ({roles})"
+        about = {"recipient": f"{owner} (AP manager)" if vendor
+                 else f"{owner} (manager of {original['to_name']}, the {roles})",
+                 "follow_up": "escalation: no reply to our email or to our reminder; you are now the action owner",
+                 "our_email_sent_to": first_to, **sent, "our_reminder_sent_on": thread["reminded_on"],
+                 "reply_to_this_email_within": "one business day"}
+        if vendor:
+            facts["action_requested"] = [f"Ask {original['to_name']} to {action[0].lower()}{action[1:]}"
+                                         for action in facts["action_requested"]]
+            writer_recipient = "AP manager (escalation of a vendor request)"
+        else:
+            writer_recipient = f"manager of the {roles} (escalation)"
+        line = (f"Escalation: we sent this request to {first_to} on {thread['sent_on']} and a reminder on "
+                f"{thread['reminded_on']}, with no reply. You are now the action owner.")
+    to = _recipient(to_id, ref)
+    email = {"email_id": f"{original['email_id']}:{kind}", "exception_id": original["exception_id"],
+             "recipient_id": to_id, "roles": list(original["roles"]), "template": kind,
+             "findings": list(original["findings"]), "status": "sent", "release_on": "", "opens_after": "",
+             "to_name": to["name"], "to_email": to["email"], "greeting": to["greeting"],
+             "cc_id": cc_id, "cc_name": cc["name"] if cc else "", "cc_email": cc["email"] if cc else "",
+             "subject": SUBJECTS[kind].format(subject=original["subject"]), "facts": {**about, **facts},
+             "writer_recipient": writer_recipient, "follow_up_line": line, "follows": original["email_id"],
+             "paragraph": "", "paragraph_source": "", "fact_check": [], "sent_on": as_of,
+             "reply_by": add_business_days(as_of, FOLLOW_UP_REPLY_DAYS), "reminder_cc": "", "escalation_to": ""}
+    email["body"] = render(email)
+    return email
+
+
 def render(email: dict) -> str:
     """The email as text: header, greeting, paragraph, then every fact code filled in."""
     facts = email["facts"]
@@ -270,8 +331,14 @@ def render(email: dict) -> str:
               f"amount {facts['amount']}.")
     if "po_number" in facts:
         header += f" PO quoted: {facts['po_number']}."
-    lines = [f"To: {email['to_name']} <{email['to_email']}>", f"Subject: {email['subject']}", "",
-             f"Hello {email['greeting']},", "", email["paragraph"] or "[paragraph not written yet]", "", header]
+    lines = [f"To: {email['to_name']} <{email['to_email']}>"]
+    if email.get("cc_email"):
+        lines.append(f"Cc: {email['cc_name']} <{email['cc_email']}>")
+    lines += [f"Subject: {email['subject']}", "", f"Hello {email['greeting']},", "",
+              email["paragraph"] or "[paragraph not written yet]", ""]
+    if email.get("follow_up_line"):
+        lines += [email["follow_up_line"], ""]
+    lines.append(header)
     for key, label in (("service_month", "Service month"), ("cost_center", "Cost center"),
                        ("gl_account", "GL account"), ("requester", "Requester")):
         if key in facts:
@@ -302,8 +369,9 @@ def facts_text(email: dict) -> str:
 
 
 def writer_messages(email: dict) -> list[dict]:
-    """One fresh single-turn request for the paragraph; the reply-by date is not in the facts (decision 10)."""
-    recipient = " and ".join(ROLE_LABELS[role] for role in email["roles"])
+    """One fresh single-turn request for the paragraph; the reply-by date is not in the facts (decision 10).
+    A reminder or an escalation names its recipient in writer_recipient."""
+    recipient = email.get("writer_recipient") or " and ".join(ROLE_LABELS[role] for role in email["roles"])
     return [{"role": "system", "content": WRITER_SYSTEM_PROMPT.format(recipient=recipient)},
             {"role": "user", "content": facts_text(email)}]
 

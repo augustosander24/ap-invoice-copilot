@@ -2,7 +2,7 @@
 
 What the AP Invoice Copilot works from: the exception list of invoices on
 payment hold, a mock mailbox of replies to the emails it sends, and the AP
-operator's scripted review decisions.
+operator's scripted review decisions and edits.
 
 **All companies, people, and email addresses in these files are fictional.**
 Emails use the reserved `.example` domain, which can never receive real mail.
@@ -100,3 +100,23 @@ recommendation, except that a non-PO invoice is never released by an override:
 it stays on hold with AP. On a possible duplicate, `duplicate` sends the
 duplicate notice and cancels the other drafts; `not_duplicate` sends the held
 drafts and cancels the notice.
+
+## review_edits.csv
+
+The AP operator's edits to the day-0 drafts for the scripted demo, read by
+`scripts/review.py --decisions ... --edits`. Without the file, `review.py`
+asks for any edits in the terminal. An edit replaces a draft's paragraph, or
+the explanation from our review shown under one of its issues, before the
+draft goes out; it must pass the same fact check as the communicator's
+paragraph: every number, ID, and name must be in that email's facts.
+
+Format: UTF-8 with no byte-order mark, comma-separated, one header row. A text
+that contains a comma is double-quoted.
+
+| Column | Meaning | Allowed values / format |
+|---|---|---|
+| `exception_id` | Invoice reviewed | an `exception_id` with a row in `review_decisions.csv` |
+| `email_id` | Draft edited | `<exception_id>:<recipient_id>:<template>` |
+| `part` | What the edit replaces | `paragraph` or `explanation` |
+| `issue` | The issue whose explanation is replaced, counted from 1 | a number for `explanation`; blank for `paragraph` |
+| `text` | The new text | text |

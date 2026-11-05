@@ -1,0 +1,4 @@
+exception_id,email_id,part,issue,text
+EX-013,EX-013:P-108:approval_request,explanation,1,"This is the third bill from this vendor, and the first 3 bills always need approval. The amount of 646.20 is slightly lower than the previous bill, GCW-0042, at 651.75."
+EX-013,EX-013:P-108:approval_request,paragraph,,"Please approve or reject invoice GCW-0043 from GreenCycle Waste Services for 646.20. It is the third bill from this vendor, and the first 3 bills always need approval. It is coded to GL account 6100 under the Warehouse Operations (CC-100) cost center."
+EX-014,EX-014:P-108:approval_request,paragraph,,"Please approve or reject invoice LIP-2026-11 from Lakeside Industrial Properties for 19425.00. The lease amount is 18500.00, and line 2 adds a late payment fee of 925.00, which is the whole difference."
