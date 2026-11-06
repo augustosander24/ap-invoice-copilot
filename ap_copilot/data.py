@@ -18,6 +18,26 @@ from openpyxl import load_workbook
 ROOT = Path(__file__).resolve().parent.parent
 REFERENCE_DIR = ROOT / "data" / "reference"
 EXCEPTION_LIST = ROOT / "data" / "input" / "exception_list.xlsx"
+DATA_SETS = ("eval", "heldout_a", "heldout_b")
+
+
+@dataclass(frozen=True)
+class DataSet:
+    """Where one set's files live: the 22-case eval (the regression check) or a held-out batch."""
+    name: str
+    reference: Path
+    input: Path
+    evals: Path
+
+
+def data_set(name: str = "eval") -> DataSet:
+    """The folders of a data set: "eval" is data/reference, data/input, and evals; a held-out batch has
+    the same three folders under data/<name>/ and evals/<name>/."""
+    if name not in DATA_SETS:
+        raise ValueError(f"Unknown data set {name!r}; expected one of {', '.join(DATA_SETS)}")
+    if name == "eval":
+        return DataSet(name, REFERENCE_DIR, ROOT / "data" / "input", ROOT / "evals")
+    return DataSet(name, ROOT / "data" / name / "reference", ROOT / "data" / name / "input", ROOT / "evals" / name)
 
 
 @dataclass(frozen=True)

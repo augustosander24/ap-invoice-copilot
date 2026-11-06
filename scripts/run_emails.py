@@ -4,19 +4,22 @@ Every invoice runs through the graph with the SQLite checkpointer until it pause
 review. Every model is replayed from saved runs by default, so day 0 needs no live model: the PO
 investigator from output/phase6/po_run_qwen3-14b.json, the non-PO investigator from
 output/phase8/nonpo_run_<its model>.json (written by scripts/run_nonpo_agent.py), and the
-communicator from output/phase8/emails_<its model>.json (the paragraphs scored in Phase 8).
+communicator from output/phase10/emails_<its model>.json (the paragraphs scored in Phase 10).
 --investigator live and --communicator live run the models instead. The drafts are compared with
-evals/expected_threads.csv as check_emails.py compares its own. Saves
-output/phase9/emails_<model>.json and .md. Exit code 0 when every paragraph passed the fact check
-on the first try and every thread matches, otherwise 1.
+evals/expected_threads.csv as check_emails.py compares its own. A live communicator run saves
+output/phase10/emails_<model>.json and .md; a replay saves emails_<model>_replay.json and .md, so
+the saved run is never overwritten. Exit code 0 when every paragraph passed the fact check on the
+first try and every thread matches, otherwise 1.
 
     .venv\\Scripts\\python.exe scripts\\run_emails.py
     .venv\\Scripts\\python.exe scripts\\run_emails.py --plant EX-001 --communicator live
     .venv\\Scripts\\python.exe scripts\\run_emails.py --investigator live --communicator live
+    .venv\\Scripts\\python.exe scripts\\run_emails.py --set heldout_a --communicator live
 
 A case already in the checkpoint file is not started again: delete
-output/phase9/checkpoints.sqlite and output/phase9/decision_log.jsonl to start over. --plant runs
-one case into its own files and adds an invented number to its first paragraph.
+output/phase10/checkpoints.sqlite and output/phase10/decision_log.jsonl to start over. --plant runs
+one case into its own files and adds an invented number to its first paragraph. --set runs a
+held-out batch in output/phase10/<set>/, replaying its investigator runs from that folder.
 """
 
 import argparse
@@ -26,17 +29,17 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-EVALS = ROOT / "evals"
-OUTPUT = ROOT / "output" / "phase9"
+OUTPUT = ROOT / "output" / "phase10"
 SAVED_RUN = ROOT / "output" / "phase6" / "po_run_qwen3-14b.json"
 PHASE8 = ROOT / "output" / "phase8"
+SAVED_EMAILS = OUTPUT  # the communicator's saved run for the eval: Phase 10's paragraphs (Phase 7 rollback)
 # Run as a script, Python puts scripts\ on sys.path, not the project root; add it so ap_copilot imports.
 sys.path.insert(0, str(ROOT))
 
 from langgraph.checkpoint.sqlite import SqliteSaver
 
 from ap_copilot.config import get_model
-from ap_copilot.data import load_invoices, load_reference, read_csv
+from ap_copilot.data import DATA_SETS, data_set, load_invoices, load_reference, read_csv
 from ap_copilot.emails import EXPORT_DATE
 from ap_copilot.graph import build_graph
 from ap_copilot.inbox import CsvInbox
@@ -65,14 +68,25 @@ class PlantingWriter:
         return reply
 
 
-def saved_nonpo_run() -> Path:
-    """The non-PO investigator's saved run for the model it is set to use."""
-    return PHASE8 / f"nonpo_run_{get_model('nonpo_investigator').replace(':', '-')}.json"
+def run_name(agent: str) -> str:
+    """The model an agent is set to use, as it appears in run file names."""
+    return get_model(agent).replace(":", "-")
 
 
-def saved_emails_run() -> Path:
-    """The communicator's saved Phase 8 run for the model it is set to use."""
-    return PHASE8 / f"emails_{get_model('communicator').replace(':', '-')}.json"
+def saved_runs(data_set_name: str) -> tuple[Path, Path, Path]:
+    """The saved PO investigator, non-PO investigator, and communicator runs to replay for a data set."""
+    if data_set_name == "eval":
+        return (SAVED_RUN, PHASE8 / f"nonpo_run_{run_name('nonpo_investigator')}.json",
+                SAVED_EMAILS / f"emails_{run_name('communicator')}.json")
+    folder = ROOT / "output" / "phase10" / data_set_name
+    return (folder / f"po_run_{run_name('po_investigator')}.json",
+            folder / f"nonpo_run_{run_name('nonpo_investigator')}.json",
+            folder / f"emails_{run_name('communicator')}.json")
+
+
+def shown(path: Path) -> str:
+    """A path as the console shows it: relative to the project folder."""
+    return path.relative_to(ROOT).as_posix()
 
 
 def main() -> int:
@@ -83,55 +97,59 @@ def main() -> int:
                         help="replay the communicator's saved Phase 8 paragraphs (default) or run the model live")
     parser.add_argument("--plant", metavar="EXCEPTION_ID",
                         help="run one case into its own files, with an invented number in its first paragraph")
+    parser.add_argument("--set", choices=DATA_SETS, default="eval", help="the data set (default: the 22-case eval)")
     args = parser.parse_args()
 
-    ref = load_reference()
-    invoices = {invoice.exception_id: invoice for invoice in load_invoices()}
+    folders = data_set(args.set)
+    output = OUTPUT if args.set == "eval" else OUTPUT / args.set
+    po_run, nonpo_run, emails_run = saved_runs(args.set)
+    ref = load_reference(folders.reference)
+    invoices = {invoice.exception_id: invoice for invoice in load_invoices(folders.input / "exception_list.xlsx")}
     if args.plant and args.plant not in invoices:
         parser.error(f"unknown case {args.plant}")
     paths = {exception_id: assess(invoice, ref).path for exception_id, invoice in invoices.items()}
     threads = {}
-    for row in read_csv(EVALS / "expected_threads.csv"):
+    for row in read_csv(folders.evals / "expected_threads.csv"):
         threads.setdefault(row["exception_id"], []).append(row)
 
     model = get_model("communicator")
     if args.communicator == "saved":
-        emails_run = saved_emails_run()
         if not emails_run.exists():
-            parser.error(f"no saved communicator run: {emails_run.name} is not in output/phase8")
-        writer = CallReplay(load_calls(emails_run, "writer_calls")[1], model, f"output/phase8/{emails_run.name}")
-        communicator = f"replay of output/phase8/{emails_run.name}"
+            parser.error(f"no saved communicator run: {shown(emails_run)} doesn't exist; use --communicator live")
+        writer = CallReplay(load_calls(emails_run, "writer_calls")[1], model, shown(emails_run))
+        communicator = f"replay of {shown(emails_run)}"
     else:
         writer = OllamaClient("communicator")
         communicator = model
     if args.plant:
         writer = PlantingWriter(writer)
     if args.investigator == "saved":
-        nonpo_run = saved_nonpo_run()
-        if not nonpo_run.exists():
-            parser.error(f"no saved non-PO run: run scripts\\run_nonpo_agent.py first ({nonpo_run.name})")
-        runs = {"po": load_run(SAVED_RUN), "non_po": load_run(nonpo_run)}
+        for run_file, script in ((po_run, "run_po_agent.py"), (nonpo_run, "run_nonpo_agent.py")):
+            if not run_file.exists():
+                parser.error(f"no saved investigator run: run scripts\\{script} first ({shown(run_file)})")
+        runs = {"po": load_run(po_run), "non_po": load_run(nonpo_run)}
         clients = {}
         for exception_id, path in paths.items():
             run_model, saved = runs[path]
             clients[exception_id] = ReplayClient(saved.get(exception_id, {"exception_id": exception_id}), run_model)
-        investigator = f"replay of output/phase6/po_run_qwen3-14b.json and output/phase8/{nonpo_run.name}"
+        investigator = f"replay of {shown(po_run)} and {shown(nonpo_run)}"
     else:
         live = {"po": OllamaClient("po_investigator"), "non_po": OllamaClient("nonpo_investigator")}
         clients = {exception_id: live[path] for exception_id, path in paths.items()}
         investigator = "live"
-    OUTPUT.mkdir(parents=True, exist_ok=True)
-    connection = sqlite3.connect(OUTPUT / ("checkpoints_planted.sqlite" if args.plant else "checkpoints.sqlite"),
+    output.mkdir(parents=True, exist_ok=True)
+    connection = sqlite3.connect(output / ("checkpoints_planted.sqlite" if args.plant else "checkpoints.sqlite"),
                                  check_same_thread=False)
     saver = SqliteSaver(connection)
-    log = DecisionLog(OUTPUT / "decision_log.jsonl")
-    print(f"email run: communicator {communicator}; investigators {investigator}; as of {EXPORT_DATE}")
+    log = DecisionLog(output / "decision_log.jsonl")
+    print(f"email run: communicator {communicator}; investigators {investigator}; as of {EXPORT_DATE}"
+          + (f"; data set {args.set}" if args.set != "eval" else ""))
 
     cases = []
     paused = matched_threads = thread_rows = thread_failures = 0
     for exception_id in [args.plant] if args.plant else list(invoices):
         graph = build_graph(ref, invoices, clients[exception_id], writer=writer, checkpointer=saver, log=log,
-                            interpreter=NoModel(), inbox=CsvInbox())
+                            interpreter=NoModel(), inbox=CsvInbox(folders.input / "inbox.csv"))
         config = {"configurable": {"thread_id": exception_id}}
         snapshot = graph.get_state(config)
         if snapshot.values:
@@ -172,9 +190,11 @@ def main() -> int:
         print(f"  plant: {writer.planted}")
 
     name = "emails_" + ("planted_" if args.plant else "") + model.replace(":", "-")
+    if args.communicator == "saved":
+        name += "_replay"  # the saved run itself is written only by a live run
     run = {"communicator": model, "communicator_source": communicator, "investigator": investigator,
            "as_of": EXPORT_DATE, "plant": args.plant, "cases": cases}
-    (OUTPUT / f"{name}.json").write_text(json.dumps(run, indent=2, ensure_ascii=False), encoding="utf-8")
+    (output / f"{name}.json").write_text(json.dumps(run, indent=2, ensure_ascii=False), encoding="utf-8")
     lines = [f"# Email drafts — communicator {communicator}, as of {EXPORT_DATE}"]
     for case in cases:
         for email in case.get("emails", []):
@@ -183,8 +203,8 @@ def main() -> int:
                           f"paragraph {email['paragraph_source']}"]
             lines += [f"- fact check: {problem}" for problem in email["fact_check"]]
             lines += ["", "```text", email["body"], "```"]
-    (OUTPUT / f"{name}.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
-    print(f"saved output/phase9/{name}.json and output/phase9/{name}.md")
+    (output / f"{name}.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print(f"saved {shown(output / name)}.json and {shown(output / name)}.md")
     print(f"{passed} of {len(calls)} paragraphs passed the fact check")
     return 0 if passed == len(calls) and not thread_failures else 1
 

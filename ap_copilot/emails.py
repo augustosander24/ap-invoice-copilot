@@ -61,6 +61,18 @@ ACTIONS = {
 WAITING_REPLY_BY = "set when this email is sent, after the service confirmation"
 FALLBACK_PARAGRAPH = "Please see the invoice details and the action requested below."
 
+# Why an approval or a confirmation is needed, in words, for the paragraph (the rules' fact lines stay in the template).
+# {bill} is this bill's number from the vendor; each text says whose step is whose.
+APPROVAL_WHY = {"utilities_over_10pct": "the bill differs from the vendor's average bill by more than 10%",
+                "utilities_first_3_bills": "this is bill {bill} from a new utility vendor, and the first 3 bills "
+                                           "always need approval",
+                "rent_differs": "the rent billed differs from the lease amount",
+                "taxes": "tax bills always need approval",
+                "subscriptions": "subscription bills always need approval",
+                "professional_services": "professional services always need approval, and this request goes to you "
+                                         "only after the requester of the service has confirmed it was received"}
+CONFIRMATION_WHY = "we approve a professional services invoice only after the requester confirms the service"
+
 _EVIDENCE_ID = re.compile(r"\b(po_line|invoice_line|receipts|receipt|po|posted|open_pos|similar_invoices|vendor"
                           r"|invoice|bill_history):([A-Za-z0-9-]+)(?::([A-Za-z0-9-]+))?")
 
@@ -224,8 +236,23 @@ def _email(assessment, outcome, accepted, ref, as_of, recipient_id, roles, findi
              "facts": facts, "paragraph": "", "paragraph_source": "", "fact_check": [],
              "reply_by": "" if opens_after else add_business_days(as_of, REPLY_DAYS), "sent_on": "",
              **follow_up}
+    draft["writer_facts"] = _writer_facts(facts, findings, outcome, len(ref.history.get(invoice.vendor_id, ())) + 1)
     draft["body"] = render(draft)
     return draft
+
+
+def _writer_facts(facts: dict, findings: list[str], outcome: dict, bill: int) -> dict:
+    """What the communicator sees: only what its paragraph needs, each under a name that says what it is.
+    The lines, the fact lines, the figures, the dates, the explanations, and the PO suggestion are left to the
+    template, which shows them under the paragraph. bill is this bill's number from the vendor."""
+    writer = {"recipient": facts["recipient"], "invoice_number": facts["invoice_number"], "vendor": facts["vendor"],
+              "invoice_total": facts["amount"], "issues_found": [issue["issue"] for issue in facts["issues"]]}
+    if "approval_required" in findings and outcome["approval_reason"] in APPROVAL_WHY:
+        writer["why_approval_is_needed"] = APPROVAL_WHY[outcome["approval_reason"]].format(bill=bill)
+    if "confirmation_required" in findings:
+        writer["why_confirmation_is_needed"] = CONFIRMATION_WHY
+    writer["action_requested"] = list(facts["action_requested"])
+    return writer
 
 
 def draft_emails(assessment: Assessment, outcome: dict, accepted: dict, ref, as_of: str = EXPORT_DATE) -> list[dict]:
@@ -310,6 +337,18 @@ def follow_up_email(original: dict, kind: str, thread: dict, as_of: str, ref) ->
             writer_recipient = f"manager of the {roles} (escalation)"
         line = (f"Escalation: we sent this request to {first_to} on {thread['sent_on']} and a reminder on "
                 f"{thread['reminded_on']}, with no reply. You are now the action owner.")
+    writer = {key: value for key, value in original["writer_facts"].items() if key != "recipient"}
+    writer["action_requested"] = list(facts["action_requested"])
+    if kind == "reminder":
+        lead = {"recipient": about["recipient"],
+                "this_email_is": "a reminder: we have had no reply to our earlier email about this invoice"}
+        if cc:
+            lead["copied_to"] = about["in_copy"]
+    else:
+        lead = {"recipient": about["recipient"],
+                "this_email_is": "an escalation: there was no reply to our email or to our reminder, "
+                                 "and you are now the action owner",
+                "our_earlier_email_went_to": first_to}
     to = _recipient(to_id, ref)
     email = {"email_id": f"{original['email_id']}:{kind}", "exception_id": original["exception_id"],
              "recipient_id": to_id, "roles": list(original["roles"]), "template": kind,
@@ -317,7 +356,7 @@ def follow_up_email(original: dict, kind: str, thread: dict, as_of: str, ref) ->
              "to_name": to["name"], "to_email": to["email"], "greeting": to["greeting"],
              "cc_id": cc_id, "cc_name": cc["name"] if cc else "", "cc_email": cc["email"] if cc else "",
              "subject": SUBJECTS[kind].format(subject=original["subject"]), "facts": {**about, **facts},
-             "writer_recipient": writer_recipient, "follow_up_line": line, "follows": original["email_id"],
+             "writer_facts": {**lead, **writer}, "writer_recipient": writer_recipient, "follow_up_line": line, "follows": original["email_id"],
              "paragraph": "", "paragraph_source": "", "fact_check": [], "sent_on": as_of,
              "reply_by": add_business_days(as_of, FOLLOW_UP_REPLY_DAYS), "reminder_cc": "", "escalation_to": ""}
     email["body"] = render(email)
@@ -369,11 +408,11 @@ def facts_text(email: dict) -> str:
 
 
 def writer_messages(email: dict) -> list[dict]:
-    """One fresh single-turn request for the paragraph; the reply-by date is not in the facts (decision 10).
-    A reminder or an escalation names its recipient in writer_recipient."""
+    """One fresh single-turn request for the paragraph: only the email's writer_facts, so the reply-by date, the
+    figures, and the dates stay in the template. A reminder or an escalation names its recipient in writer_recipient."""
     recipient = email.get("writer_recipient") or " and ".join(ROLE_LABELS[role] for role in email["roles"])
     return [{"role": "system", "content": WRITER_SYSTEM_PROMPT.format(recipient=recipient)},
-            {"role": "user", "content": facts_text(email)}]
+            {"role": "user", "content": json.dumps(email["writer_facts"], ensure_ascii=False)}]
 
 
 def known_names(ref) -> set[str]:
@@ -432,5 +471,5 @@ def write_paragraph(email: dict, writer, ref) -> tuple[dict, dict]:
     written["body"] = render(written)
     call = {"email_id": email["email_id"], "prompt": messages[1]["content"], "reply": reply["message"]["content"],
             "problems": problems, "seconds": reply["seconds"], "prompt_tokens": reply["prompt_tokens"],
-            "output_tokens": reply["output_tokens"]}
+            "output_tokens": reply["output_tokens"], "done_reason": reply.get("done_reason", "")}
     return written, call

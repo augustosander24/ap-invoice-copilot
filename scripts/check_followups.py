@@ -13,18 +13,20 @@ matched to their threads", "threads: N of 21 match", and "N of 22 cases match". 
 every case matches, otherwise 1.
 
     .venv\\Scripts\\python.exe scripts\\check_followups.py
+    .venv\\Scripts\\python.exe scripts\\check_followups.py --set heldout_a
+
+--set runs a held-out batch (data/<set>/ and evals/<set>/) instead of the 22-case eval.
 """
 
+import argparse
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-EVALS = ROOT / "evals"
-INPUT = ROOT / "data" / "input"
 # Run as a script, Python puts scripts\ on sys.path, not the project root; add it so ap_copilot imports.
 sys.path.insert(0, str(ROOT))
 
-from ap_copilot.data import load_invoices, load_reference, read_csv
+from ap_copilot.data import DATA_SETS, data_set, load_invoices, load_reference, read_csv
 from ap_copilot.emails import EXPORT_DATE, FALLBACK_PARAGRAPH, add_business_days, draft_emails, render
 from ap_copilot.followup import follow_up, invoice_status, match_reply, open_threads
 from ap_copilot.inbox import CsvInbox
@@ -98,16 +100,19 @@ def ruling_problems(emails: list[dict], threads: list[dict], as_of: str) -> list
 
 
 def main() -> int:
-    ref = load_reference()
-    invoices = load_invoices()
-    expected = {row["exception_id"]: row for row in read_csv(EVALS / "expected_outcomes.csv")}
+    parser = argparse.ArgumentParser(description="Compare the follow-up with a data set's expected threads.")
+    parser.add_argument("--set", choices=DATA_SETS, default="eval", help="the data set (default: the 22-case eval)")
+    folders = data_set(parser.parse_args().set)
+    ref = load_reference(folders.reference)
+    invoices = load_invoices(folders.input / "exception_list.xlsx")
+    expected = {row["exception_id"]: row for row in read_csv(folders.evals / "expected_outcomes.csv")}
     threads_by_case, labels = {}, {}
-    for row in read_csv(EVALS / "expected_threads.csv"):
+    for row in read_csv(folders.evals / "expected_threads.csv"):
         threads_by_case.setdefault(row["exception_id"], []).append(row)
         if row["reply_message_id"]:
             labels[row["reply_message_id"]] = (row["reply_label"], row["reply_detail"])
-    decisions = {row["exception_id"]: row["decision"] for row in read_csv(INPUT / "review_decisions.csv")}
-    inbox = CsvInbox()
+    decisions = {row["exception_id"]: row["decision"] for row in read_csv(folders.input / "review_decisions.csv")}
+    inbox = CsvInbox(folders.input / "inbox.csv")
     print(f"follow-up check: {len(invoices)} cases; agent verdicts and reply labels from evals/; "
           f"fixed paragraph (no model); days {DAY4} and {DAY5}")
 

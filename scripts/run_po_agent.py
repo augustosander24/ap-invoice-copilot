@@ -15,21 +15,28 @@ output/phase6/po_run_<model>.json. Exit code 0 when every case matches, otherwis
 Exception IDs limit the run to those cases. --plant runs one case and replaces
 its first po_match answer with the invoice's own (invalid) PO number, to show
 the evidence check rejecting a bad claim.
+
+    .venv\\Scripts\\python.exe scripts\\run_po_agent.py --set heldout_a EX-101 EX-102
+    .venv\\Scripts\\python.exe scripts\\run_po_agent.py --set heldout_a --resume
+
+--set runs a held-out batch into output/phase10/<set>/po_run_<model>.json, one file
+whatever IDs are given. The run file is saved after every case, so a stopped run
+keeps what it finished; --resume keeps the cases already in the file and runs the rest.
 """
 
 import argparse
 import json
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-EVALS = ROOT / "evals"
 OUTPUT = ROOT / "output" / "phase6"
 # Run as a script, Python puts scripts\ on sys.path, not the project root; add it so ap_copilot imports.
 sys.path.insert(0, str(ROOT))
 
-from ap_copilot.data import load_invoices, load_reference, read_csv
+from ap_copilot.data import DATA_SETS, data_set, load_invoices, load_reference, read_csv
 from ap_copilot.graph import build_graph
 from ap_copilot.investigator import OllamaClient, to_json
 from ap_copilot.rules import assess
@@ -132,11 +139,17 @@ def main() -> int:
     parser.add_argument("ids", nargs="*", metavar="EXCEPTION_ID", help="limit the run to these PO cases")
     parser.add_argument("--plant", metavar="EXCEPTION_ID",
                         help="run one case with its first po_match answer replaced by its own PO number")
+    parser.add_argument("--set", choices=DATA_SETS, default="eval", help="the data set (default: the 22-case eval)")
+    parser.add_argument("--resume", action="store_true", help="keep the cases already in the run file; run the rest")
     args = parser.parse_args()
+    if args.plant and (args.resume or args.set != "eval"):
+        parser.error("--plant runs on the eval, without --resume")
 
-    ref = load_reference()
-    invoices = {invoice.exception_id: invoice for invoice in load_invoices()}
-    expected = {row["exception_id"]: row for row in read_csv(EVALS / "expected_outcomes.csv")}
+    folders = data_set(args.set)
+    output = OUTPUT if args.set == "eval" else ROOT / "output" / "phase10" / args.set
+    ref = load_reference(folders.reference)
+    invoices = {invoice.exception_id: invoice for invoice in load_invoices(folders.input / "exception_list.xlsx")}
+    expected = {row["exception_id"]: row for row in read_csv(folders.evals / "expected_outcomes.csv")}
     po_ids = [exception_id for exception_id, invoice in invoices.items() if assess(invoice, ref).path == "po"]
     wanted = [args.plant] if args.plant else args.ids
     unknown = [exception_id for exception_id in wanted if exception_id not in po_ids]
@@ -148,47 +161,60 @@ def main() -> int:
     model = client.model
     if args.plant:
         client = PlantingClient(client, invoices[args.plant].po_number)
+    name = "po_run_" + ("planted_" if args.plant else "") + model.replace(":", "-")
+    if args.ids and args.set == "eval" and not args.plant:
+        name += "_" + "_".join(case_ids)
+    name += ".json"
+    path = output / name
+    cases = []
+    if args.resume and path.exists():
+        saved = json.loads(path.read_text(encoding="utf-8"))
+        if saved["model"] != model:
+            parser.error(f"{name} was run with {saved['model']}, not {model}")
+        cases = saved["cases"]
+    done = {case["exception_id"] for case in cases}
+    to_run = [exception_id for exception_id in case_ids if exception_id not in done]
     graph = build_graph(ref, invoices, client)
-    header = f"PO investigator run: {len(case_ids)} cases, model {model}"
+    header = f"PO investigator run: {len(to_run)} cases, model {model}"
+    if args.set != "eval":
+        header += f", data set {args.set}"
+    if done:
+        header += f"; {len(done)} already in {name}"
     print(header + (f", planted bad claim on {args.plant}" if args.plant else ""))
 
-    cases = []
-    tallies = {column: [0, 0] for column in COLUMNS}
-    matched = checked = retries = fallbacks = 0
-    for exception_id in case_ids:
+    output.mkdir(parents=True, exist_ok=True)
+    run = {"model": model, "plant": args.plant, "planted": "", "cases": cases}
+    for exception_id in to_run:
+        started_at = datetime.now().isoformat(timespec="seconds")
         started = time.perf_counter()
         state = graph.invoke({"exception_id": exception_id})
         seconds = round(time.perf_counter() - started, 1)
         results = compare(state, expected[exception_id])
         print_case(state, results, seconds)
-        for column, problem in results.items():
+        cases.append({"exception_id": exception_id, "started_at": started_at, "seconds": seconds,
+                      "results": results, **state})
+        run["planted"] = client.planted if args.plant else ""
+        path.write_text(json.dumps(run, indent=2, ensure_ascii=False), encoding="utf-8")  # after every case
+
+    tallies = {column: [0, 0] for column in COLUMNS}
+    for case in cases:
+        for column, problem in case["results"].items():
             tallies[column][0] += not problem
             tallies[column][1] += 1
-        matched += not any(results.values())
-        checked += bool(state["checks"])
-        retries += max(len(state["checks"]) - 1, 0)
-        fallbacks += len(state["fallbacks"])
-        cases.append({"exception_id": exception_id, "seconds": seconds, "results": results, **state})
-
+    matched = sum(not any(case["results"].values()) for case in cases)
     print("summary")
     for column in COLUMNS:
         good, total = tallies[column]
         print(f"  {column} {good} of {total}")
-    print(f"  evidence check: {checked} cases, {retries} retries, {fallbacks} fallbacks")
-    planted = client.planted if args.plant else ""
+    print(f"  evidence check: {sum(bool(case['checks']) for case in cases)} cases, "
+          f"{sum(max(len(case['checks']) - 1, 0) for case in cases)} retries, "
+          f"{sum(len(case['fallbacks']) for case in cases)} fallbacks")
     if args.plant:
-        print(f"  plant: {planted}")
-
-    name = "po_run_" + ("planted_" if args.plant else "") + model.replace(":", "-")
-    if args.ids and not args.plant:
-        name += "_" + "_".join(case_ids)
-    name += ".json"
-    OUTPUT.mkdir(parents=True, exist_ok=True)
-    run = {"model": model, "plant": args.plant, "planted": planted, "cases": cases}
-    (OUTPUT / name).write_text(json.dumps(run, indent=2, ensure_ascii=False), encoding="utf-8")
-    print(f"saved output/phase6/{name}")
-    print(f"{matched} of {len(case_ids)} PO cases match")
-    return 0 if matched == len(case_ids) else 1
+        print(f"  plant: {run['planted']}")
+    path.write_text(json.dumps(run, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"saved {path.relative_to(ROOT).as_posix()}")
+    print(f"{matched} of {len(cases)} PO cases match")
+    return 0 if matched == len(cases) else 1
 
 
 if __name__ == "__main__":

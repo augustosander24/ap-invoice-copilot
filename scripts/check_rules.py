@@ -9,17 +9,20 @@ per case with its fact lines and actions, the agent-request counts, and
 "N of 22 cases match". Exit code 0 when every case matches, otherwise 1.
 
     .venv\\Scripts\\python.exe scripts\\check_rules.py
+    .venv\\Scripts\\python.exe scripts\\check_rules.py --set heldout_a
+
+--set runs a held-out batch (data/<set>/ and evals/<set>/) instead of the 22-case eval.
 """
 
+import argparse
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-EVALS = ROOT / "evals"
 # Run as a script, Python puts scripts\ on sys.path, not the project root; add it so ap_copilot imports.
 sys.path.insert(0, str(ROOT))
 
-from ap_copilot.data import load_invoices, load_reference, read_csv
+from ap_copilot.data import DATA_SETS, data_set, load_invoices, load_reference, read_csv
 from ap_copilot.routing import Verdicts, finalize
 from ap_copilot.rules import AP_QUEUE_FINDINGS, assess
 
@@ -92,13 +95,17 @@ def check_case(invoice, ref, expected: dict[str, str], threads: list[dict[str, s
 
 
 def main() -> int:
-    ref = load_reference()
-    invoices = load_invoices()
-    expected = {row["exception_id"]: row for row in read_csv(EVALS / "expected_outcomes.csv")}
+    parser = argparse.ArgumentParser(description="Compare the rules engine with a data set's expected outcomes.")
+    parser.add_argument("--set", choices=DATA_SETS, default="eval", help="the data set (default: the 22-case eval)")
+    folders = data_set(parser.parse_args().set)
+    ref = load_reference(folders.reference)
+    invoices = load_invoices(folders.input / "exception_list.xlsx")
+    expected = {row["exception_id"]: row for row in read_csv(folders.evals / "expected_outcomes.csv")}
     threads = {}
-    for row in read_csv(EVALS / "expected_threads.csv"):
+    for row in read_csv(folders.evals / "expected_threads.csv"):
         threads.setdefault(row["exception_id"], []).append(row)
-    print(f"rules check: {len(invoices)} cases; agent verdicts from evals/expected_outcomes.csv (no model in Phase 5)")
+    source = "evals" if folders.name == "eval" else f"evals/{folders.name}"
+    print(f"rules check: {len(invoices)} cases; agent verdicts from {source}/expected_outcomes.csv (no model in Phase 5)")
 
     requested_by_kind = {kind: [] for kind, _, _ in REQUESTS}
     matched = 0

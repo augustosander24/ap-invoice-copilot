@@ -77,7 +77,8 @@ class PoState(TypedDict, total=False):
 def _model_call(attempt: int, step: str, reply: dict) -> dict:
     """The log entry for one model call."""
     return {"attempt": attempt, "step": step, "seconds": reply["seconds"],
-            "prompt_tokens": reply["prompt_tokens"], "output_tokens": reply["output_tokens"]}
+            "prompt_tokens": reply["prompt_tokens"], "output_tokens": reply["output_tokens"],
+            "done_reason": reply.get("done_reason", "")}
 
 
 def _text_tool_call(content: str) -> list[dict]:

@@ -125,5 +125,6 @@ def interpret(reply, email: dict, interpreter, ref) -> tuple[dict, dict]:
               "reason": reason, "problems": problems}
     call = {"message_id": reply.message_id, "prompt": messages[1]["content"],
             "reply": response["message"]["content"], "problems": problems, "seconds": response["seconds"],
-            "prompt_tokens": response["prompt_tokens"], "output_tokens": response["output_tokens"]}
+            "prompt_tokens": response["prompt_tokens"], "output_tokens": response["output_tokens"],
+            "done_reason": response.get("done_reason", "")}
     return record, call

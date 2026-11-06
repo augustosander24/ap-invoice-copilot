@@ -9,17 +9,20 @@ shows an AP-only fact or another vendor. Prints PASS or FAIL per case, "threads:
 match", and "N of 22 cases match". Exit code 0 when every case matches, otherwise 1.
 
     .venv\\Scripts\\python.exe scripts\\check_emails.py
+    .venv\\Scripts\\python.exe scripts\\check_emails.py --set heldout_a
+
+--set runs a held-out batch (data/<set>/ and evals/<set>/) instead of the 22-case eval.
 """
 
+import argparse
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-EVALS = ROOT / "evals"
 # Run as a script, Python puts scripts\ on sys.path, not the project root; add it so ap_copilot imports.
 sys.path.insert(0, str(ROOT))
 
-from ap_copilot.data import load_invoices, load_reference, read_csv
+from ap_copilot.data import DATA_SETS, data_set, load_invoices, load_reference, read_csv
 from ap_copilot.emails import FALLBACK_PARAGRAPH, draft_emails, facts_text, render
 from ap_copilot.evidence import numbers_in
 from ap_copilot.routing import Verdicts, finalize, outcome_dict
@@ -87,11 +90,14 @@ def content_problems(email: dict, invoice, ref) -> list[str]:
 
 
 def main() -> int:
-    ref = load_reference()
-    invoices = load_invoices()
-    expected = {row["exception_id"]: row for row in read_csv(EVALS / "expected_outcomes.csv")}
+    parser = argparse.ArgumentParser(description="Compare the email drafts with a data set's expected threads.")
+    parser.add_argument("--set", choices=DATA_SETS, default="eval", help="the data set (default: the 22-case eval)")
+    folders = data_set(parser.parse_args().set)
+    ref = load_reference(folders.reference)
+    invoices = load_invoices(folders.input / "exception_list.xlsx")
+    expected = {row["exception_id"]: row for row in read_csv(folders.evals / "expected_outcomes.csv")}
     threads = {}
-    for row in read_csv(EVALS / "expected_threads.csv"):
+    for row in read_csv(folders.evals / "expected_threads.csv"):
         threads.setdefault(row["exception_id"], []).append(row)
     print(f"email check: {len(invoices)} cases; agent verdicts from evals/expected_outcomes.csv; "
           "fixed paragraph (no model)")

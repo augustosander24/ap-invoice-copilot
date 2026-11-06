@@ -27,7 +27,8 @@ class ReplayClient:
             raise ReplayMismatch(f"{self.exception_id}: attempt {entry['attempt']} {entry['step']} step: "
                                  "the request differs from the saved run; rerun the investigator live")
         return {"message": deepcopy(entry["reply"]), "seconds": call["seconds"],
-                "prompt_tokens": call["prompt_tokens"], "output_tokens": call["output_tokens"]}
+                "prompt_tokens": call["prompt_tokens"], "output_tokens": call["output_tokens"],
+                "done_reason": call.get("done_reason", "")}
 
     def unused(self) -> int:
         """How many saved replies are left."""
@@ -60,7 +61,8 @@ class CallReplay:
             raise ReplayMismatch(f"a request is not in {self.source}; the code has changed since that run, "
                                  "so rerun this agent live")
         return {"message": {"role": "assistant", "content": call["reply"]}, "seconds": call["seconds"],
-                "prompt_tokens": call["prompt_tokens"], "output_tokens": call["output_tokens"]}
+                "prompt_tokens": call["prompt_tokens"], "output_tokens": call["output_tokens"],
+                "done_reason": call.get("done_reason", "")}
 
 
 class NoModel:

@@ -14,21 +14,28 @@ code 0 when every case matches, otherwise 1.
     .venv\\Scripts\\python.exe scripts\\run_nonpo_agent.py EX-012 EX-022
 
 Exception IDs limit the run to those cases, saved under a separate name.
+
+    .venv\\Scripts\\python.exe scripts\\run_nonpo_agent.py --set heldout_a
+    .venv\\Scripts\\python.exe scripts\\run_nonpo_agent.py --set heldout_a --resume
+
+--set runs a held-out batch into output/phase10/<set>/nonpo_run_<model>.json, one file
+whatever IDs are given. The run file is saved after every case, so a stopped run
+keeps what it finished; --resume keeps the cases already in the file and runs the rest.
 """
 
 import argparse
 import json
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-EVALS = ROOT / "evals"
 OUTPUT = ROOT / "output" / "phase8"
 # Run as a script, Python puts scripts\ on sys.path, not the project root; add it so ap_copilot imports.
 sys.path.insert(0, str(ROOT))
 
-from ap_copilot.data import load_invoices, load_reference, read_csv
+from ap_copilot.data import DATA_SETS, data_set, load_invoices, load_reference, read_csv
 from ap_copilot.graph import build_graph
 from ap_copilot.investigator import OllamaClient
 from ap_copilot.rules import assess
@@ -110,11 +117,15 @@ def print_case(state: dict, results: dict[str, str], seconds: float) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run the non-PO investigator with the local model.")
     parser.add_argument("ids", nargs="*", metavar="EXCEPTION_ID", help="limit the run to these non-PO cases")
+    parser.add_argument("--set", choices=DATA_SETS, default="eval", help="the data set (default: the 22-case eval)")
+    parser.add_argument("--resume", action="store_true", help="keep the cases already in the run file; run the rest")
     args = parser.parse_args()
 
-    ref = load_reference()
-    invoices = {invoice.exception_id: invoice for invoice in load_invoices()}
-    expected = {row["exception_id"]: row for row in read_csv(EVALS / "expected_outcomes.csv")}
+    folders = data_set(args.set)
+    output = OUTPUT if args.set == "eval" else ROOT / "output" / "phase10" / args.set
+    ref = load_reference(folders.reference)
+    invoices = {invoice.exception_id: invoice for invoice in load_invoices(folders.input / "exception_list.xlsx")}
+    expected = {row["exception_id"]: row for row in read_csv(folders.evals / "expected_outcomes.csv")}
     nonpo_ids = [exception_id for exception_id, invoice in invoices.items()
                  for assessment in [assess(invoice, ref)]
                  if assessment.path == "non_po" and "exact_duplicate" not in assessment.findings]
@@ -125,47 +136,58 @@ def main() -> int:
 
     client = OllamaClient("nonpo_investigator")
     model = client.model
-    graph = build_graph(ref, invoices, client)
-    print(f"non-PO investigator run: {len(case_ids)} cases, model {model}")
-
-    started_run = time.perf_counter()
+    name = "nonpo_run_" + model.replace(":", "-")
+    if args.ids and args.set == "eval":
+        name += "_" + "_".join(case_ids)
+    name += ".json"
+    path = output / name
     cases = []
-    tallies = {column: [0, 0] for column in COLUMNS}
-    matched = checked = retries = fallbacks = model_calls = 0
-    for exception_id in case_ids:
+    if args.resume and path.exists():
+        saved = json.loads(path.read_text(encoding="utf-8"))
+        if saved["model"] != model:
+            parser.error(f"{name} was run with {saved['model']}, not {model}")
+        cases = saved["cases"]
+    done = {case["exception_id"] for case in cases}
+    to_run = [exception_id for exception_id in case_ids if exception_id not in done]
+    graph = build_graph(ref, invoices, client)
+    header = f"non-PO investigator run: {len(to_run)} cases, model {model}"
+    if args.set != "eval":
+        header += f", data set {args.set}"
+    print(header + (f"; {len(done)} already in {name}" if done else ""))
+
+    output.mkdir(parents=True, exist_ok=True)
+    run = {"model": model, "cases": cases}
+    for exception_id in to_run:
+        started_at = datetime.now().isoformat(timespec="seconds")
         started = time.perf_counter()
         state = graph.invoke({"exception_id": exception_id})
         seconds = round(time.perf_counter() - started, 1)
         results = compare(state, expected[exception_id])
         print_case(state, results, seconds)
-        for column, problem in results.items():
+        cases.append({"exception_id": exception_id, "started_at": started_at, "seconds": seconds,
+                      "results": results, **state})
+        path.write_text(json.dumps(run, indent=2, ensure_ascii=False), encoding="utf-8")  # after every case
+
+    tallies = {column: [0, 0] for column in COLUMNS}
+    for case in cases:
+        for column, problem in case["results"].items():
             tallies[column][0] += not problem
             tallies[column][1] += 1
-        matched += not any(results.values())
-        checked += bool(state["checks"])
-        retries += max(len(state["checks"]) - 1, 0)
-        fallbacks += len(state["fallbacks"])
-        model_calls += len(state["model_calls"])
-        cases.append({"exception_id": exception_id, "seconds": seconds, "results": results, **state})
-
+    matched = sum(not any(case["results"].values()) for case in cases)
     print("summary")
     for column in COLUMNS:
         good, total = tallies[column]
         if total:  # a column no case scores is left out, as duplicate_verdict: no non-PO candidate in the data
             print(f"  {column} {good} of {total}")
-    print(f"  evidence check: {checked} cases, {retries} retries, {fallbacks} fallbacks")
-    print(f"  model calls: {model_calls}; {round(time.perf_counter() - started_run, 1)} s")
-
-    name = "nonpo_run_" + model.replace(":", "-")
-    if args.ids:
-        name += "_" + "_".join(case_ids)
-    name += ".json"
-    OUTPUT.mkdir(parents=True, exist_ok=True)
-    run = {"model": model, "cases": cases}
-    (OUTPUT / name).write_text(json.dumps(run, indent=2, ensure_ascii=False), encoding="utf-8")
-    print(f"saved output/phase8/{name}")
-    print(f"{matched} of {len(case_ids)} non-PO cases match")
-    return 0 if matched == len(case_ids) else 1
+    print(f"  evidence check: {sum(bool(case['checks']) for case in cases)} cases, "
+          f"{sum(max(len(case['checks']) - 1, 0) for case in cases)} retries, "
+          f"{sum(len(case['fallbacks']) for case in cases)} fallbacks")
+    print(f"  model calls: {sum(len(case['model_calls']) for case in cases)}; "
+          f"{round(sum(case['seconds'] for case in cases), 1)} s")
+    path.write_text(json.dumps(run, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"saved {path.relative_to(ROOT).as_posix()}")
+    print(f"{matched} of {len(cases)} non-PO cases match")
+    return 0 if matched == len(cases) else 1
 
 
 if __name__ == "__main__":

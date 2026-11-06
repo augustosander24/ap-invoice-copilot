@@ -1,10 +1,10 @@
 """The AP operator's review: show each paused invoice, take a decision, resume the run.
 
-For each invoice paused in output/phase9/checkpoints.sqlite it prints what the operator
+For each invoice paused in output/phase10/checkpoints.sqlite it prints what the operator
 reviews (recommendation, findings, the AP-queue facts, every draft, numbered), lets the operator
 edit a draft's paragraph or explanation, and asks for a decision and a reason, then resumes the
 run: the graph applies the edits and the decision to the drafts and writes one line to
-output/phase9/decision_log.jsonl. No model runs on resume. An invoice already reviewed is
+output/phase10/decision_log.jsonl. No model runs on resume. An invoice already reviewed is
 reported and left as it is.
 
     .venv\\Scripts\\python.exe scripts\\review.py
@@ -13,7 +13,9 @@ reported and left as it is.
 
 With no arguments it reviews every paused invoice and asks in the terminal; exception IDs
 limit it to those invoices; --decisions reads the decisions from a CSV instead of asking, and
---edits the operator's edits.
+--edits the operator's edits. --set reviews a held-out batch in output/phase10/<set>/.
+
+    .venv\\Scripts\\python.exe scripts\\review.py --set heldout_a --decisions data\\heldout_a\\input\\review_decisions.csv
 """
 
 import argparse
@@ -23,14 +25,14 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-OUTPUT = ROOT / "output" / "phase9"
+OUTPUT = ROOT / "output" / "phase10"
 # Run as a script, Python puts scripts\ on sys.path, not the project root; add it so ap_copilot imports.
 sys.path.insert(0, str(ROOT))
 
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.types import Command
 
-from ap_copilot.data import load_invoices, load_reference, read_csv
+from ap_copilot.data import DATA_SETS, data_set, load_invoices, load_reference, read_csv
 from ap_copilot.graph import build_graph
 from ap_copilot.inbox import CsvInbox
 from ap_copilot.replay import NoModel
@@ -73,24 +75,27 @@ def main() -> int:
     parser.add_argument("ids", nargs="*", metavar="EXCEPTION_ID", help="review only these invoices")
     parser.add_argument("--decisions", metavar="CSV", help="read the decisions from this file instead of asking")
     parser.add_argument("--edits", metavar="CSV", help="with --decisions: read the operator's edits from this file")
+    parser.add_argument("--set", choices=DATA_SETS, default="eval", help="the data set (default: the 22-case eval)")
     args = parser.parse_args()
     if args.edits and not args.decisions:
         parser.error("--edits needs --decisions")
-    checkpoints = OUTPUT / "checkpoints.sqlite"
+    folders = data_set(args.set)
+    output = OUTPUT if args.set == "eval" else OUTPUT / args.set
+    checkpoints = output / "checkpoints.sqlite"
     if not checkpoints.exists():
         parser.error("no checkpoints yet: run scripts\\run_emails.py first")
 
-    ref = load_reference()
-    invoices = {invoice.exception_id: invoice for invoice in load_invoices()}
+    ref = load_reference(folders.reference)
+    invoices = {invoice.exception_id: invoice for invoice in load_invoices(folders.input / "exception_list.xlsx")}
     decisions = {row["exception_id"]: row for row in read_csv(Path(args.decisions))} if args.decisions else {}
     edits = {}
     for row in read_csv(Path(args.edits)) if args.edits else []:
         edits.setdefault(row["exception_id"], []).append({key: row[key] for key in ("email_id", "part", "issue", "text")})
     connection = sqlite3.connect(checkpoints, check_same_thread=False)
     saver = SqliteSaver(connection)
-    log = DecisionLog(OUTPUT / "decision_log.jsonl")
+    log = DecisionLog(output / "decision_log.jsonl")
     graph = build_graph(ref, invoices, NoModel(), writer=NoModel(), checkpointer=saver, log=log,
-                        interpreter=NoModel(), inbox=CsvInbox())
+                        interpreter=NoModel(), inbox=CsvInbox(folders.input / "inbox.csv"))
     threads = sorted({checkpoint.config["configurable"]["thread_id"] for checkpoint in saver.list(None)})
 
     for exception_id in args.ids or (sorted(decisions) if args.decisions else threads):
@@ -132,10 +137,10 @@ def main() -> int:
                     print(f"      edited {edit['part']}{where}: {edit['after']}")
 
     reviewed = [graph.get_state({"configurable": {"thread_id": thread}}).values for thread in threads]
-    (OUTPUT / "reviewed.json").write_text(json.dumps(reviewed, indent=2, ensure_ascii=False), encoding="utf-8")
+    (output / "reviewed.json").write_text(json.dumps(reviewed, indent=2, ensure_ascii=False), encoding="utf-8")
     connection.close()
     print(f"decision log: {len(log.entries())} entries")
-    print("saved output/phase9/reviewed.json")
+    print(f"saved {(output / 'reviewed.json').relative_to(ROOT).as_posix()}")
     return 0
 
 

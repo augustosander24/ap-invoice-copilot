@@ -9,8 +9,13 @@ counts, and the demo calendar.
 Standard library plus openpyxl. Runs from any working directory:
 
     .venv\\Scripts\\python.exe scripts\\check_data.py
+    .venv\\Scripts\\python.exe scripts\\check_data.py --set heldout_a
+
+--set checks a held-out batch (data/<set>/ and evals/<set>/) with every check, except that its
+coverage check asks for 5 or more cases in each agent column and 3 or more replies per label.
 """
 
+import argparse
 import csv
 import sys
 from datetime import date, datetime, timedelta
@@ -949,6 +954,22 @@ def check_coverage(tables, report):
             report.fail("evals", reason=f"no case covers {item}")
 
 
+HELDOUT_AGENT_COLUMNS = ("first_tool", "duplicate_verdict", "po_match", "mismatch_flag", "category_suggestion")
+
+
+def check_heldout_coverage(tables, report):
+    """A held-out batch: every agent column has 5 or more cases (the 80% bar applies) and every reply label 3 or more."""
+    report.start("coverage")
+    for column in HELDOUT_AGENT_COLUMNS:
+        count = sum(1 for row in tables["expected_outcomes.csv"] if row[column])
+        if count < 5:
+            report.fail("expected_outcomes.csv", reason=f"{column} has {count} cases; a held-out batch needs 5 or more")
+    for label in REPLY_LABELS:
+        count = sum(1 for row in tables["expected_threads.csv"] if row["reply_label"] == label)
+        if count < 3:
+            report.fail("expected_threads.csv", reason=f"reply label {label} has {count} replies; a held-out batch needs 3 or more")
+
+
 def print_summary(tables):
     print()
     print("row counts")
@@ -1006,6 +1027,15 @@ def print_eval_summary(tables):
 
 
 def main():
+    global REF, INPUT, EVALS
+    parser = argparse.ArgumentParser(description="Check the reference data, the inputs, and the eval of one data set.")
+    parser.add_argument("--set", choices=("eval", "heldout_a", "heldout_b"), default="eval",
+                        help="the data set (default: the 22-case eval)")
+    data_set = parser.parse_args().set
+    if data_set != "eval":
+        REF, INPUT, EVALS = (ROOT / "data" / data_set / "reference", ROOT / "data" / data_set / "input",
+                             ROOT / "evals" / data_set)
+        print(f"data set: {data_set}")
     report = Report()
     tables = load_all(report)
     check_unique_ids(tables, report)
@@ -1027,7 +1057,10 @@ def main():
     check_planted(tables, report)
     check_outcomes(tables, report)
     check_threads(tables, report)
-    check_coverage(tables, report)
+    if data_set == "eval":
+        check_coverage(tables, report)
+    else:
+        check_heldout_coverage(tables, report)
 
     failed = report.print_results()
     print_summary(tables)

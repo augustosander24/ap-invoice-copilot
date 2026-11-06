@@ -1,13 +1,13 @@
 """One follow-up run: read the replies up to the as-of date and send what is due.
 
-Each invoice waiting in output/phase9/checkpoints.sqlite resumes with the as-of date: the graph
+Each invoice waiting in output/phase10/checkpoints.sqlite resumes with the as-of date: the graph
 reads the inbox replies dated up to it, the reply interpreter labels each new one (replayed
 from output/phase9/replies_<its model>.json, written by scripts/run_replies.py, by default;
 --interpreter live runs the model), code sends what is due (a waiting approval, a reminder, an
 escalation), the communicator writes each follow-up paragraph live, and the day is logged in
-output/phase9/decision_log.jsonl. The threads are compared with evals/expected_threads.csv as
+output/phase10/decision_log.jsonl. The threads are compared with evals/expected_threads.csv as
 check_followups.py compares its own. An invoice already run for that date is left as it is, so a
-second run of the same day changes nothing. Saves output/phase9/day_<as_of>.json and .md, built
+second run of the same day changes nothing. Saves output/phase10/day_<as_of>.json and .md, built
 from the saved state, so a second run writes the same files. Exit code 0 when every follow-up
 paragraph passed the fact check on the first try and every thread and reply matches, otherwise 1.
 
@@ -15,7 +15,10 @@ paragraph passed the fact check on the first try and every thread and reply matc
     .venv\\Scripts\\python.exe scripts\\run_day.py --day 5
     .venv\\Scripts\\python.exe scripts\\run_day.py --as-of 2026-12-08 --interpreter live
 
---day N is the demo calendar's day N: N business days after day 0 (2026-11-30).
+--day N is the demo calendar's day N: N business days after day 0 (2026-11-30). --set runs a
+held-out batch in output/phase10/<set>/, replaying its interpreter run from that folder.
+
+    .venv\\Scripts\\python.exe scripts\\run_day.py --set heldout_a --day 4
 """
 
 import argparse
@@ -26,8 +29,8 @@ from collections import Counter
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-EVALS = ROOT / "evals"
-OUTPUT = ROOT / "output" / "phase9"
+OUTPUT = ROOT / "output" / "phase10"
+REPLIES = ROOT / "output" / "phase9"  # the reply interpreter's saved run for the eval
 # Run as a script, Python puts scripts\ on sys.path, not the project root; add it so ap_copilot imports.
 sys.path.insert(0, str(ROOT))
 
@@ -35,7 +38,7 @@ from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.types import Command
 
 from ap_copilot.config import get_model
-from ap_copilot.data import load_invoices, load_reference, read_csv
+from ap_copilot.data import DATA_SETS, data_set, load_invoices, load_reference, read_csv
 from ap_copilot.emails import EXPORT_DATE, add_business_days
 from ap_copilot.graph import as_of_problems, build_graph
 from ap_copilot.inbox import CsvInbox
@@ -45,9 +48,10 @@ from ap_copilot.review import DecisionLog
 from check_followups import followup_problems, ruling_problems  # same folder: scripts\ is first on sys.path
 
 
-def saved_replies_run() -> Path:
-    """The reply interpreter's saved run for the model it is set to use."""
-    return OUTPUT / f"replies_{get_model('reply_interpreter').replace(':', '-')}.json"
+def saved_replies_run(data_set_name: str) -> Path:
+    """The reply interpreter's saved run for the model it is set to use, for a data set."""
+    folder = REPLIES if data_set_name == "eval" else OUTPUT / data_set_name
+    return folder / f"replies_{get_model('reply_interpreter').replace(':', '-')}.json"
 
 
 def print_case(exception_id: str, label: str, state: dict, as_of: str) -> None:
@@ -80,37 +84,42 @@ def main() -> int:
     when.add_argument("--as-of", help="the run's date, YYYY-MM-DD")
     parser.add_argument("--interpreter", choices=("saved", "live"), default="saved",
                         help="replay the saved reply interpreter run (default) or run the model live")
+    parser.add_argument("--set", choices=DATA_SETS, default="eval", help="the data set (default: the 22-case eval)")
     args = parser.parse_args()
+    folders = data_set(args.set)
+    output = OUTPUT if args.set == "eval" else OUTPUT / args.set
     as_of = add_business_days(EXPORT_DATE, args.day) if args.day is not None else args.as_of
     problems = as_of_problems({"as_of": EXPORT_DATE}, {"as_of": as_of})
     if problems:
         parser.error(problems[0])
-    checkpoints = OUTPUT / "checkpoints.sqlite"
+    checkpoints = output / "checkpoints.sqlite"
     if not checkpoints.exists():
         parser.error("no checkpoints yet: run scripts\\run_emails.py and scripts\\review.py first")
 
-    ref = load_reference()
-    invoices = {invoice.exception_id: invoice for invoice in load_invoices()}
+    ref = load_reference(folders.reference)
+    invoices = {invoice.exception_id: invoice for invoice in load_invoices(folders.input / "exception_list.xlsx")}
     rows = {}
-    for row in read_csv(EVALS / "expected_threads.csv"):
+    for row in read_csv(folders.evals / "expected_threads.csv"):
         rows.setdefault(row["exception_id"], []).append(row)
     if args.interpreter == "saved":
-        replies_run = saved_replies_run()
+        replies_run = saved_replies_run(args.set)
+        shown = replies_run.relative_to(ROOT).as_posix()
         if not replies_run.exists():
-            parser.error(f"no saved reply interpreter run: run scripts\\run_replies.py first ({replies_run.name})")
+            parser.error(f"no saved reply interpreter run: run scripts\\run_replies.py first ({shown})")
         model, calls = load_calls(replies_run, "calls")
-        interpreter = CallReplay(calls, model, f"output/phase9/{replies_run.name}")
-        source = f"replay of output/phase9/{replies_run.name}"
+        interpreter = CallReplay(calls, model, shown)
+        source = f"replay of {shown}"
     else:
         interpreter = OllamaClient("reply_interpreter")
         source = interpreter.model
     writer = OllamaClient("communicator")
     connection = sqlite3.connect(checkpoints, check_same_thread=False)
     saver = SqliteSaver(connection)
-    log = DecisionLog(OUTPUT / "decision_log.jsonl")
+    log = DecisionLog(output / "decision_log.jsonl")
     graph = build_graph(ref, invoices, NoModel(), writer=writer, checkpointer=saver, log=log,
-                        interpreter=interpreter, inbox=CsvInbox())
-    print(f"follow-up run: as of {as_of}; reply interpreter {source}; communicator {writer.model}")
+                        interpreter=interpreter, inbox=CsvInbox(folders.input / "inbox.csv"))
+    print(f"follow-up run: as of {as_of}; reply interpreter {source}; communicator {writer.model}"
+          + (f"; data set {args.set}" if args.set != "eval" else ""))
 
     cases, matched, thread_rows, failures, ran = [], 0, 0, 0, 0
     for exception_id in invoices:
@@ -162,14 +171,15 @@ def main() -> int:
 
     name = f"day_{as_of}"
     run = {"as_of": as_of, "interpreter": source, "communicator": writer.model, "cases": cases}
-    (OUTPUT / f"{name}.json").write_text(json.dumps(run, indent=2, ensure_ascii=False), encoding="utf-8")
+    (output / f"{name}.json").write_text(json.dumps(run, indent=2, ensure_ascii=False), encoding="utf-8")
     lines = [f"# Follow-up run — as of {as_of}, communicator {writer.model}"]
     for email in sent:
         lines += ["", f"## {email['email_id']} — sent {as_of}, paragraph {email['paragraph_source'] or 'day 0'}"]
         lines += [f"- fact check: {problem}" for problem in email["fact_check"]]
         lines += ["", "```text", email["body"], "```"]
-    (OUTPUT / f"{name}.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
-    print(f"saved output/phase9/{name}.json and output/phase9/{name}.md")
+    (output / f"{name}.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    shown = (output / name).relative_to(ROOT).as_posix()
+    print(f"saved {shown}.json and {shown}.md")
     print(f"{matched} of {thread_rows} threads match")
     return 0 if passed == len(calls) and not failures else 1
 

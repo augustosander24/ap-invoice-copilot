@@ -11,7 +11,7 @@ import time
 
 from pydantic import BaseModel, create_model
 
-from ap_copilot.config import OLLAMA_HOST, get_model
+from ap_copilot.config import OLLAMA_HOST, get_max_tokens, get_model, get_think
 from ap_copilot.evidence import EXPLANATION_FINDINGS
 from ap_copilot.rules import Assessment
 
@@ -191,22 +191,25 @@ class OllamaClient:
     def __init__(self, agent: str = "po_investigator"):
         from ollama import Client  # imported here so tests never need a server
         self.model = get_model(agent)
+        self.max_tokens = get_max_tokens(agent)
+        self.think = get_think(agent)
         self.client = Client(host=OLLAMA_HOST)
 
     def chat(self, messages: list[dict], tools: list[dict] | None = None,
              schema: dict | None = None) -> dict:
-        """Send the conversation; return the reply message, seconds, and token counts."""
+        """Send the conversation; return the reply message, seconds, token counts, and why it stopped
+        ("length" when the output cap cut it off)."""
         started = time.perf_counter()
-        response = self.client.chat(model=self.model, messages=messages, tools=tools,
-                                    format=schema, options=MODEL_OPTIONS)
+        response = self.client.chat(model=self.model, messages=messages, tools=tools, format=schema,
+                                    options={**MODEL_OPTIONS, "num_predict": self.max_tokens}, think=self.think)
         seconds = round(time.perf_counter() - started, 1)
         message = {"role": "assistant", "content": response.message.content or ""}
         if response.message.tool_calls:
             message["tool_calls"] = [{"function": {"name": call.function.name,
                                                    "arguments": dict(call.function.arguments)}}
                                      for call in response.message.tool_calls]
-        return {"message": message, "seconds": seconds,
-                "prompt_tokens": response.prompt_eval_count, "output_tokens": response.eval_count}
+        return {"message": message, "seconds": seconds, "prompt_tokens": response.prompt_eval_count,
+                "output_tokens": response.eval_count, "done_reason": response.done_reason or ""}
 
 
 def to_json(value) -> str:
