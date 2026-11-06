@@ -1,0 +1,30 @@
+exception_id,decision,reason
+EX-101,confirm,
+EX-102,confirm,
+EX-103,confirm,
+EX-104,confirm,
+EX-105,confirm,
+EX-106,confirm,
+EX-107,confirm,
+EX-108,confirm,
+EX-109,confirm,
+EX-110,duplicate,"Same PO, date, and amount as posted RES-31055, which already billed PO-27110 in full."
+EX-111,duplicate,"Same number as posted NSP-20871 once the slash is read as a dash, with the same PO, date, and amount."
+EX-112,not_duplicate,"Posted BPC-0417 is a year older, on another PO, for a different amount: a separate charge."
+EX-113,duplicate,"Same number as posted 005618 without the leading zeros, with the same PO, date, and amount."
+EX-114,confirm,
+EX-115,confirm,
+EX-116,confirm,
+EX-117,confirm,
+EX-118,confirm,
+EX-119,confirm,
+EX-120,confirm,
+EX-121,confirm,
+EX-122,confirm,
+EX-123,confirm,
+EX-124,confirm,
+EX-125,confirm,
+EX-126,confirm,
+EX-127,confirm,
+EX-128,confirm,
+EX-129,confirm,

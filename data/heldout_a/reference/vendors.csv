@@ -1,0 +1,21 @@
+vendor_id,vendor_name,category,cost_center,contact_email,lease_amount
+V-1101,Copperline Tool Supply,inventory,,ar@copperlinetools.example,
+V-1102,Northfield Safety Products,inventory,,ar@northfieldsafety.example,
+V-1103,Bayview Packaging Co.,inventory,,ar@bayviewpackaging.example,
+V-1104,Ridgeline Electrical Supply,inventory,,ar@ridgelineelectrical.example,
+V-2101,Lakeshore Gas Company,utilities,CC-200,ar@lakeshoregas.example,
+V-2102,Pinecrest Electric Cooperative,utilities,CC-100,ar@pinecrestelectric.example,
+V-2103,Evergreen Water District,utilities,CC-200,ar@evergreenwater.example,
+V-2104,Northbay Power Utility,utilities,CC-300,ar@northbaypower.example,
+V-2105,Crestview Waste Haulers,utilities,CC-100,ar@crestviewwaste.example,
+V-3101,Harborview Business Park,rent,CC-100,ar@harborviewpark.example,12400.00
+V-3102,Westgate Storage Partners,rent,CC-200,ar@westgatestorage.example,4800.00
+V-5101,PayStream Payroll Cloud,subscriptions,CC-400,ar@paystream.example,
+V-5102,FleetTrack Telematics,subscriptions,CC-300,ar@fleettrack.example,
+V-6101,Whitfield Consulting Group,professional_services,CC-100,ar@whitfieldconsulting.example,
+V-6102,Granite Peak Advisors,professional_services,CC-300,ar@granitepeak.example,
+V-7101,Riverbend Natural Gas Co.,,,ar@riverbendgas.example,
+V-7102,Oakline Self Storage,,,ar@oaklinestorage.example,
+V-7103,LearnWell Online,,,ar@learnwell.example,
+V-7104,Bramley & Stone LLP,,,ar@bramleystone.example,
+V-7105,Ashford City Clerk,,,ar@ashfordcity.example,

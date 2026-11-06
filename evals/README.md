@@ -171,3 +171,64 @@ detail, and the day 4 and day 5 actions.
 Each agent job is scored only on the cases where that agent ran. Per job,
 Phase 10 reports a pass rate against the 80% bar where the job has 5 or more
 cases, and n of N otherwise.
+
+## Held-out batches
+
+The 22 cases above are the **tuned set**: the prompts and checks were
+adjusted on them, so their results show regression, not generalization.
+The held-out batches test the same agent jobs on cases no prompt was
+tuned on.
+
+| Batch | Cases | Replies | Files | Status |
+|---|---|---|---|---|
+| A (`heldout_a`) | 29: `EX-101`–`EX-129` (13 PO, 16 non-PO) | 18: `M-21`–`M-38` | `data/heldout_a/`, `evals/heldout_a/` | generated, keyed, frozen, run in Phase 10 |
+| B (`heldout_b`) | 29: `EX-201`–`EX-229` | 18: `M-51`–`M-68` | tables only | sealed: generated and run only under the fall-short rule |
+
+**How they are built.** `scripts/build_heldout.py <set>` writes a batch
+from its case tables, `data/heldout_tables/<set>.json`, the single source
+(never typed into the CSVs). A batch copies the company master (people,
+cost centers, GL accounts) from `data/reference/` and has its own
+vendors, POs, receipts, and history, so no lookup returns a tuned-set
+record. The data rules of the tuned set hold: text IDs, `.example`
+addresses, fictional names, Decimal amounts, the same demo calendar.
+
+**How the expected answers were checked,** before any model saw a
+held-out case:
+
+1. **By script, the code columns.** `check_data.py --set heldout_a`
+   (every check, with a held-out coverage list) and `check_rules.py`,
+   `check_emails.py`, and `check_followups.py --set heldout_a`. The
+   unchanged rules engine computes each case independently of the
+   generator, and every case and thread matches.
+2. **By script, the judgment columns code can test:** an expected PO match
+   is the only open PO of that vendor with an invoice item; a duplicate
+   "yes" has the same amount, PO, and date as the posted invoice; a
+   promised date or a named person passes the reply check.
+3. **Blind second key.** A separate Claude agent, given only a key sheet of
+   the evidence (no answers), keyed batch A's 39 judgment items: duplicate
+   verdicts (5), content checks (11), category suggestions (5), and reply
+   labels (18). It agreed on 38 of 39; the one miss came from the sheet
+   leaving out the people on file.
+4. **Domain review.** The project owner (18 years of accounts payable)
+   reviewed all 39 with the expected answers shown, and changed 4: a reply
+   that answers only part of the email is `unclear`; a partial approval is
+   `unclear`; "I want to understand the license line before I sign off" is
+   a `question`; add-ons beyond a subscription plan (extra seats, extra
+   storage) don't fit the category, so AP reviews them. Two replies were
+   reworded so every label keeps 3 cases. The same rules were applied to
+   batch B.
+
+**The seal.** Both batches' tables and batch A's files were committed
+before the first held-out run, and every run file records its start time,
+so the history shows the answers were fixed first.
+
+**The bar and the rule for a shortfall.** 80% on every scored column with
+5 or more cases, n of N below 5, as for the tuned set. A held-out result is
+reported as it stands: no prompt, wording, fact, tool, or check changes
+because of held-out outputs, and expected answers change only for a data
+error the files prove. A model or design change for a job that falls short
+is tested once, on batch B; there is no batch C.
+
+**Running a batch:** add `--set heldout_a` to any checker or runner, for
+example `.venv\Scripts\python.exe scripts\check_rules.py --set heldout_a`.
+Held-out runs save to `output/phase10/heldout_a/`.

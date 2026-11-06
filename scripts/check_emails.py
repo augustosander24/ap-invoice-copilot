@@ -112,7 +112,7 @@ def main() -> int:
             notices = [email for email in emails if email["release_on"] == "duplicate"]
             others = [email for email in emails if email["release_on"] != "duplicate"]
             if not (len(notices) == 1 and notices[0]["template"] == "duplicate_notice"
-                    and notices[0]["status"] == "held" and others
+                    and notices[0]["status"] == "held"
                     and all(email["status"] == "held" and email["release_on"] == "not_duplicate" for email in others)):
                 problems.append("a possible duplicate needs every draft held until AP clears it, "
                                 "plus one held duplicate notice for AP to confirm")

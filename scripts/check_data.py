@@ -11,8 +11,9 @@ Standard library plus openpyxl. Runs from any working directory:
     .venv\\Scripts\\python.exe scripts\\check_data.py
     .venv\\Scripts\\python.exe scripts\\check_data.py --set heldout_a
 
---set checks a held-out batch (data/<set>/ and evals/<set>/) with every check, except that its
-coverage check asks for 5 or more cases in each agent column and 3 or more replies per label.
+--set checks a held-out batch (data/<set>/ and evals/<set>/) with every check, except two: its
+coverage check asks for 5 or more cases in each agent column and 3 or more replies per label, and
+it may have several blank-category vendors (one per category-suggestion case).
 """
 
 import argparse
@@ -54,6 +55,7 @@ REPLY_LABELS = ("approved", "rejected", "correction_coming", "question", "redire
 SERVICE_MONTH_REQUIRED = ("utilities", "rent", "taxes", "subscriptions")
 VENDOR_REMINDER_CC = "P-104"    # AP Team
 VENDOR_ESCALATION_TO = "P-103"  # AP Manager, who becomes the action owner
+HELDOUT = False  # set by --set: a held-out batch has a blank-category vendor per category-suggestion case
 
 HEADERS = {
     "people.csv": ["person_id", "name", "email", "title", "department", "role", "reports_to"],
@@ -329,7 +331,10 @@ def check_vendor_rules(tables, report):
                         f"only rent vendors have a lease_amount, not {category or 'blank-category'}")
         if not category:
             blanks.append(row)
-    if len(blanks) != 1:
+    if HELDOUT and not blanks:
+        report.fail("vendors.csv", column="category", value="",
+                    reason="no vendor has a blank category; a held-out batch needs one per category-suggestion case")
+    elif not HELDOUT and len(blanks) != 1:
         report.fail("vendors.csv", column="category", value="",
                     reason=f"{len(blanks)} vendors have a blank category; expected exactly 1")
 
@@ -1027,7 +1032,7 @@ def print_eval_summary(tables):
 
 
 def main():
-    global REF, INPUT, EVALS
+    global REF, INPUT, EVALS, HELDOUT
     parser = argparse.ArgumentParser(description="Check the reference data, the inputs, and the eval of one data set.")
     parser.add_argument("--set", choices=("eval", "heldout_a", "heldout_b"), default="eval",
                         help="the data set (default: the 22-case eval)")
@@ -1035,6 +1040,7 @@ def main():
     if data_set != "eval":
         REF, INPUT, EVALS = (ROOT / "data" / data_set / "reference", ROOT / "data" / data_set / "input",
                              ROOT / "evals" / data_set)
+        HELDOUT = True
         print(f"data set: {data_set}")
     report = Report()
     tables = load_all(report)

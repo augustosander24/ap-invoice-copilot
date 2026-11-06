@@ -1,0 +1,19 @@
+message_id,received_date,from_email,vendor_id,invoice_number,body
+M-21,2026-12-01,sofia.ramos@northgate.example,V-1101,CTS-5561,The bit sets went up to 27.50 in October and I agreed to it. Please pay the invoice as billed.
+M-22,2026-12-02,ar@copperlinetools.example,V-1101,CTS-5561,"Apologies, the total on our invoice was mistyped. We will send a corrected invoice by December 3."
+M-23,2026-12-02,tom.keller@northgate.example,V-1102,NSP-21044,Why are the vests cheaper than the PO? Did Northfield send a different model?
+M-24,2026-12-03,tom.keller@northgate.example,V-1104,RES-31188,"We ordered and received 24 fixtures, not 30. Don't pay for the extra six, ask Ridgeline for a credit."
+M-25,2026-12-02,sofia.ramos@northgate.example,V-1102,NSP-21102,The gloves and ear plugs are on the truck and arrive tomorrow. Please hold the invoice until then.
+M-26,2026-12-01,ar@bayviewpackaging.example,V-1103,BPC-0471,Tom Keller placed this order with us by phone. Please check the PO number with him.
+M-27,2026-12-03,ar@northfieldsafety.example,V-1102,NSP-21150,"Sorry, our dock gave us the wrong PO number. We'll send a corrected invoice with the right PO by December 4."
+M-28,2026-12-02,ar@copperlinetools.example,V-1101,CTS-5592,"You're right, the torque wrenches belong to PO-27109. We will reissue the invoice against PO-27109 by December 4."
+M-29,2026-12-02,laura.mendes@northgate.example,V-2102,PEC-44134,"Pinecrest says a revised bill is coming next week, so hold off for now."
+M-30,2026-12-07,kevin.doyle@northgate.example,V-2103,EWD-7724,Was a credit applied this month? The water bill is usually higher than this.
+M-31,2026-12-01,laura.mendes@northgate.example,V-3101,HBP-2026-11,Facilities took over the annex lease in October. Please send this to Kevin Doyle.
+M-32,2026-12-03,kevin.doyle@northgate.example,V-3102,WSP-2026-11,Pay the storage rent only. We never ordered chairs from Westgate.
+M-33,2026-12-02,daniel.ortiz@northgate.example,V-5101,PSP-3307,Renee Walsh looks after the payroll vendors now. Please send it to her.
+M-34,2026-12-03,priya.nair@northgate.example,V-5102,FTT-8107,"Don't pay this. We cancelled FleetTrack in October, so neither the plan nor the tracking units should be billed."
+M-35,2026-12-01,marcus.reed@northgate.example,V-6101,WCG-1231,"Yes, Whitfield finished the layout study last week. Service received."
+M-36,2026-12-07,laura.mendes@northgate.example,V-6101,WCG-1231,Don't pay this one. Phase 1 was included in the fixed fee we already paid Whitfield.
+M-37,2026-12-02,hannah.cho@northgate.example,V-6102,GPA-0957,"Confirmed, Granite Peak delivered the security assessment report on November 24."
+M-38,2026-12-07,priya.nair@northgate.example,V-6102,GPA-0957,Before I sign off I want to understand the license line. I'll come back to you on it.
