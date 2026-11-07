@@ -1,0 +1,113 @@
+set,job,run,kind,item,verdict,note
+eval,communicator,1,paragraph_day0,EX-001:P-106:buyer_query,correct,
+eval,communicator,1,paragraph_day0,EX-002:P-107:buyer_query,correct,
+eval,communicator,1,paragraph_day0,EX-003:V-1001:vendor_correction,correct,Style: 'unable to verify ... valid'
+eval,communicator,1,paragraph_day0,EX-004:P-106:buyer_query,correct,
+eval,communicator,1,paragraph_day0,EX-005:P-107:buyer_query,correct,
+eval,communicator,1,paragraph_day0,EX-006:V-1003:vendor_correction,correct,Style: 'unable to verify ... valid'
+eval,communicator,1,paragraph_day0,EX-007:V-1003:vendor_correction,correct,
+eval,communicator,1,paragraph_day0,EX-008:V-1003:vendor_correction,correct,Style: 'unable to verify ... valid'
+eval,communicator,1,paragraph_day0,EX-008:V-1003:duplicate_notice,correct,
+eval,communicator,1,paragraph_day0,EX-009:P-107:buyer_query,correct,
+eval,communicator,1,paragraph_day0,EX-009:V-1004:vendor_correction,correct,
+eval,communicator,1,paragraph_day0,EX-010:V-2001:duplicate_notice,correct,
+eval,communicator,1,paragraph_day0,EX-012:P-109:approval_request,correct,
+eval,communicator,1,paragraph_day0,EX-013:V-2003:vendor_correction,correct,
+eval,communicator,1,paragraph_day0,EX-013:P-108:approval_request,misread,Misread: 'first invoice'
+eval,communicator,1,paragraph_day0,EX-014:P-108:approval_request,correct,
+eval,communicator,1,paragraph_day0,EX-016:P-102:approval_request,correct,
+eval,communicator,1,paragraph_day0,EX-017:P-102:approval_request,correct,
+eval,communicator,1,paragraph_day0,EX-018:P-110:approval_request,correct,
+eval,communicator,1,paragraph_day0,EX-019:P-102:service_confirmation,correct,Style: the confirmation is called 'an issue'
+eval,communicator,1,paragraph_day0,EX-019:P-101:approval_request,misread,Misread: 'your confirmation'
+eval,communicator,1,paragraph_day0,EX-020:P-112:service_confirmation,correct,Style: the confirmation is called 'an issue'
+eval,communicator,1,paragraph_day0,EX-020:P-110:approval_request,misread,Misread: 'your confirmation'
+eval,communicator,1,paragraph_followup,EX-002:P-107:buyer_query:reminder,correct,
+eval,communicator,1,paragraph_followup,EX-008:V-1003:duplicate_notice:reminder,correct,
+eval,communicator,1,paragraph_followup,EX-008:V-1003:duplicate_notice:escalation,correct,Style: 'You have been escalated'
+eval,communicator,1,paragraph_followup,EX-012:P-109:approval_request:reminder,correct,
+eval,communicator,1,paragraph_followup,EX-012:P-109:approval_request:escalation,correct,Style: says a reminder was 'ignored'
+eval,communicator,1,paragraph_followup,EX-013:V-2003:vendor_correction:reminder,correct,
+eval,communicator,1,paragraph_followup,EX-013:V-2003:vendor_correction:escalation,correct,
+eval,communicator,2,paragraph_day0,EX-001:P-106:buyer_query,correct,
+eval,communicator,2,paragraph_day0,EX-002:P-107:buyer_query,correct,
+eval,communicator,2,paragraph_day0,EX-003:V-1001:vendor_correction,correct,Style: 'unable to verify ... valid'
+eval,communicator,2,paragraph_day0,EX-004:P-106:buyer_query,correct,
+eval,communicator,2,paragraph_day0,EX-005:P-107:buyer_query,correct,
+eval,communicator,2,paragraph_day0,EX-006:V-1003:vendor_correction,correct,Style: 'unable to verify ... valid'
+eval,communicator,2,paragraph_day0,EX-007:V-1003:vendor_correction,correct,
+eval,communicator,2,paragraph_day0,EX-008:V-1003:vendor_correction,correct,Style: 'unable to verify ... valid'
+eval,communicator,2,paragraph_day0,EX-008:V-1003:duplicate_notice,correct,
+eval,communicator,2,paragraph_day0,EX-009:P-107:buyer_query,correct,
+eval,communicator,2,paragraph_day0,EX-009:V-1004:vendor_correction,correct,
+eval,communicator,2,paragraph_day0,EX-010:V-2001:duplicate_notice,correct,
+eval,communicator,2,paragraph_day0,EX-012:P-109:approval_request,correct,
+eval,communicator,2,paragraph_day0,EX-013:V-2003:vendor_correction,correct,
+eval,communicator,2,paragraph_day0,EX-013:P-108:approval_request,correct,Style: 'required to approve' without 'or reject'; ends 'Approval is needed.' (redundant)
+eval,communicator,2,paragraph_day0,EX-014:P-108:approval_request,correct,
+eval,communicator,2,paragraph_day0,EX-016:P-102:approval_request,correct,
+eval,communicator,2,paragraph_day0,EX-017:P-102:approval_request,correct,
+eval,communicator,2,paragraph_day0,EX-018:P-110:approval_request,correct,
+eval,communicator,2,paragraph_day0,EX-019:P-102:service_confirmation,correct,Style: the confirmation is called 'an issue'
+eval,communicator,2,paragraph_day0,EX-019:P-101:approval_request,correct,Style: ends 'Approval is needed.' (redundant)
+eval,communicator,2,paragraph_day0,EX-020:P-112:service_confirmation,correct,Style: the confirmation is called 'an issue'
+eval,communicator,2,paragraph_day0,EX-020:P-110:approval_request,correct,
+eval,communicator,2,paragraph_followup,EX-002:P-107:buyer_query:reminder,correct,
+eval,communicator,2,paragraph_followup,EX-008:V-1003:duplicate_notice:reminder,correct,
+eval,communicator,2,paragraph_followup,EX-008:V-1003:duplicate_notice:escalation,correct,Style: 'You have been escalated'
+eval,communicator,2,paragraph_followup,EX-012:P-109:approval_request:reminder,correct,
+eval,communicator,2,paragraph_followup,EX-012:P-109:approval_request:escalation,correct,Style: says a reminder was 'ignored'
+eval,communicator,2,paragraph_followup,EX-013:V-2003:vendor_correction:reminder,correct,
+eval,communicator,2,paragraph_followup,EX-013:V-2003:vendor_correction:escalation,correct,
+heldout_a,communicator,1,paragraph_day0,EX-101:P-106:buyer_query,correct,
+heldout_a,communicator,1,paragraph_day0,EX-101:V-1101:vendor_correction,correct,
+heldout_a,communicator,1,paragraph_day0,EX-102:P-107:buyer_query,correct,
+heldout_a,communicator,1,paragraph_day0,EX-103:P-106:buyer_query,correct,
+heldout_a,communicator,1,paragraph_day0,EX-104:P-107:buyer_query,correct,
+heldout_a,communicator,1,paragraph_day0,EX-105:P-106:buyer_query,correct,
+heldout_a,communicator,1,paragraph_day0,EX-106:V-1103:vendor_correction,correct,
+heldout_a,communicator,1,paragraph_day0,EX-107:V-1104:vendor_correction,correct,Style: 'unable to verify ... valid'
+heldout_a,communicator,1,paragraph_day0,EX-108:V-1102:vendor_correction,correct,Style: 'unable to verify ... valid'
+heldout_a,communicator,1,paragraph_day0,EX-109:V-1101:vendor_correction,correct,Style: 'unable to verify ... valid'
+heldout_a,communicator,1,paragraph_day0,EX-110:V-1104:vendor_correction,correct,Style: 'unable to verify ... valid'
+heldout_a,communicator,1,paragraph_day0,EX-110:V-1104:duplicate_notice,correct,
+heldout_a,communicator,1,paragraph_day0,EX-111:V-1102:vendor_correction,correct,Style: 'unable to verify ... valid'
+heldout_a,communicator,1,paragraph_day0,EX-111:V-1102:duplicate_notice,correct,
+heldout_a,communicator,1,paragraph_day0,EX-112:V-1103:duplicate_notice,correct,
+heldout_a,communicator,1,paragraph_day0,EX-113:V-1101:vendor_correction,correct,Style: 'unable to verify ... valid'
+heldout_a,communicator,1,paragraph_day0,EX-113:V-1101:duplicate_notice,correct,
+heldout_a,communicator,1,paragraph_day0,EX-115:P-108:approval_request,correct,
+heldout_a,communicator,1,paragraph_day0,EX-116:P-109:approval_request,correct,
+heldout_a,communicator,1,paragraph_day0,EX-117:P-108:approval_request,correct,Style: ends 'Approval is needed.' (redundant)
+heldout_a,communicator,1,paragraph_day0,EX-119:P-108:approval_request,correct,
+heldout_a,communicator,1,paragraph_day0,EX-120:P-109:approval_request,correct,
+heldout_a,communicator,1,paragraph_day0,EX-121:P-102:approval_request,correct,
+heldout_a,communicator,1,paragraph_day0,EX-122:P-110:approval_request,correct,
+heldout_a,communicator,1,paragraph_day0,EX-123:P-111:service_confirmation,correct,Style: the confirmation is called 'an issue'
+heldout_a,communicator,1,paragraph_day0,EX-123:P-108:approval_request,correct,Style: ends 'Approval is needed.' (redundant)
+heldout_a,communicator,1,paragraph_day0,EX-124:P-112:service_confirmation,correct,Style: the confirmation is called 'an issue'
+heldout_a,communicator,1,paragraph_day0,EX-124:P-110:approval_request,correct,
+heldout_a,communicator,1,paragraph_followup,EX-103:P-106:buyer_query:reminder,correct,
+heldout_a,communicator,1,paragraph_followup,EX-103:P-106:buyer_query:escalation,correct,Style: 'You have been escalated'; says a reminder was 'ignored'
+heldout_a,communicator,1,paragraph_followup,EX-107:V-1104:vendor_correction:reminder,correct,
+heldout_a,communicator,1,paragraph_followup,EX-107:V-1104:vendor_correction:escalation,misread,Misread: 'the issues found are that a valid open purchase order number cannot be used' turns the ask into the issue
+heldout_a,communicator,1,paragraph_followup,EX-110:V-1104:duplicate_notice:reminder,correct,
+heldout_a,communicator,1,paragraph_followup,EX-110:V-1104:duplicate_notice:escalation,correct,Style: 'You have been escalated'
+heldout_a,communicator,1,paragraph_followup,EX-111:V-1102:duplicate_notice:reminder,correct,
+heldout_a,communicator,1,paragraph_followup,EX-111:V-1102:duplicate_notice:escalation,correct,Style: 'You have been escalated'
+heldout_a,communicator,1,paragraph_followup,EX-113:V-1101:duplicate_notice:reminder,correct,
+heldout_a,communicator,1,paragraph_followup,EX-113:V-1101:duplicate_notice:escalation,correct,Style: 'You have been escalated'
+heldout_a,communicator,1,paragraph_followup,EX-116:P-109:approval_request:reminder,correct,Style: ends 'Approval is needed.' (redundant)
+heldout_a,communicator,1,paragraph_followup,EX-117:P-108:approval_request:reminder,correct,Style: ends 'Approval is needed.' (redundant)
+heldout_a,communicator,1,paragraph_followup,EX-117:P-108:approval_request:escalation,correct,Style: ends 'Approval is needed.' (redundant)
+heldout_a,po,1,explanation,EX-101:price_variance_explanation,correct,
+heldout_a,po,1,explanation,EX-102:price_variance_explanation,correct,
+heldout_a,po,1,explanation,EX-103:quantity_variance_explanation,misread,"Receipt arithmetic: '20 units (50 in R-6006 + 10 in R-6007)' is the 60 received, not the 20 short"
+heldout_a,po,1,explanation,EX-104:quantity_variance_explanation,correct,
+heldout_a,po,1,explanation,EX-105:price_variance_explanation,correct,
+heldout_a,po,1,explanation,EX-105:quantity_variance_explanation,correct,
+heldout_a,nonpo,1,explanation,EX-115:bill_change_explanation,correct,
+heldout_a,nonpo,1,explanation,EX-116:bill_change_explanation,correct,
+heldout_a,nonpo,1,explanation,EX-117:bill_change_explanation,correct,
+heldout_a,nonpo,1,explanation,EX-119:rent_difference_explanation,correct,
+heldout_a,nonpo,1,explanation,EX-120:rent_difference_explanation,correct,

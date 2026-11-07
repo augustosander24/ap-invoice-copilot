@@ -1,0 +1,18 @@
+job,phase,run,model,result,tuned,fix_rounds,note,current
+po_investigator,6,1,llama3.1:8b,5 of 9,untuned,0,"First live run, before any fix",no
+po_investigator,6,2,llama3.1:8b,5 of 9,tuned,1,"After fix round 1: tool-call handling, evidence rules, duplicate-task wording",no
+po_investigator,6,3,llama3.1:8b,8 of 9,tuned,2,After fix round 2: one fresh single-turn request per model call; EX-008 duplicate verdict missed,no
+po_investigator,6,4,qwen3:14b,9 of 9,tuned: the code came from fix rounds 1-3 on these 9 cases with llama3.1:8b; qwen3:14b had no round of its own,3,"first_tool 9 of 9, duplicate_verdict 2 of 2, po_match 4 of 4, rules_fields 9 of 9; 8 retries, 0 fallbacks; 4 of 9 cases right on the first attempt; 56 model calls, 3 h 11 min",yes
+nonpo_investigator,8,1,llama3.1:8b,8 of 12,untuned,0,"first_tool 2 of 4, mismatch 7 of 8 (EX-018 missed), category 0 of 1; 0 retries, 0 fallbacks; 21 calls, 595 s; explanations by hand 2 of 3",no
+nonpo_investigator,8,2,qwen3:14b,9 of 12,untuned,0,"first_tool 1 of 4, mismatch 8 of 8, category 1 of 1; 0 retries, 0 fallbacks; 19 calls, about 48 min; explanations by hand 3 of 3; the first lookup stands as recorded with no eval or prompt change (2026-11-04)",yes
+reply_interpreter,9,1,llama3.1:8b,17 of 18,untuned,0,M-15 read as a question; 3.5 min,no
+reply_interpreter,9,2,qwen3:14b,18 of 18,"untuned, except M-08's label meaning, worded with that case in view",0,0 check failures; 31.5 min,yes
+communicator_day0,7,1,llama3.1:8b,fact check 23 of 23; by hand 17 of 23,untuned,0,Phase 7 run 1,no
+communicator_day0,7,2,llama3.1:8b,fact check 23 of 23; by hand 19 of 23,tuned,1,After Phase 7 fix round 1 (wording),no
+communicator_day0,7,3,llama3.1:8b,fact check 23 of 23; by hand 23 of 23,tuned,2,After Phase 7 fix round 2 (labeled figures),no
+communicator_day0,8,1,llama3.1:8b,fact check 23 of 23; the 3 new paragraphs 3 of 3 by hand,untuned (new paragraphs only),2,"Phase 8: EX-012, EX-013, EX-014 approvals",no
+communicator_day0,10,2,llama3.1:8b,see section 4,"tuned: Phase 7 rounds 1-2 on these cases, then the Phase 10 rollback and one design round (5b) on the same cases",2 (Phase 7) + rollback + 1 design round,"Phase 10 on the 22-case eval, from the narrower writer_facts",yes
+communicator_followup,9,1,llama3.1:8b,fact check 7 of 7; by hand 4 of 7,untuned,0,Phase 9 first run,no
+communicator_followup,9,2,llama3.1:8b,fact check 7 of 7; by hand 5 of 7,tuned,1,"After Phase 9 fix 1 (fact names: whose email, which date)",no
+communicator_followup,9,3,llama3.1:8b,fact check 7 of 7; by hand 7 of 7,tuned,2,After Phase 9 fix 2 (the reminder's own deadline; Ask <vendor> to ...),no
+communicator_followup,10,2,llama3.1:8b,see section 4,"tuned: Phase 9 fixes 1-2 on these 7 paragraphs, then the Phase 10 rollback and one design round (5b) on the same cases",2 (Phase 9) + rollback + 1 design round,"Phase 10 on the 22-case eval, from the narrower writer_facts",yes
