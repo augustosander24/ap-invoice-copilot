@@ -22,6 +22,8 @@ phase1-model-test/
 # Local databases and run output
 *.sqlite
 *.db
+# output/ is ignored, but the saved runs the replays and the report read are tracked on purpose
+# (added with git add -f; listed under "Saved runs" in README.md). New run files stay ignored.
 output/
 
 # Windows filesystem cruft

@@ -1,0 +1,11 @@
+# Line endings: LF in the repository and in every checkout, on every OS.
+* text=auto eol=lf
+
+# Binary files: never converted, never diffed as text.
+*.xlsx binary
+*.gif binary
+*.png binary
+*.sqlite binary
+
+# Saved run files: generated output, folded in GitHub's diffs.
+output/** linguist-generated

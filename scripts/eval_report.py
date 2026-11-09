@@ -1,15 +1,15 @@
-"""Build docs/eval_report.md: every agent job's 22-case result beside its held-out result.
+"""Build docs/eval_report.md: every agent job's 22-case result beside its held-out results.
 
 Reads the saved run files (output/phase6, phase8, phase9, phase10), the four checkers, and two small
-files in docs/: hand_scores.csv (the hand verdicts of Phase 10) and agent_history.csv (the earlier phases'
-recorded results). Writes docs/eval_report.md and changes nothing else. The report is built from the
-files, so a second run writes the same bytes. Exit code 0 when every held-out paragraph and explanation
-and every eval paragraph has a hand verdict, otherwise 1.
+files in docs/: hand_scores.csv (the hand verdicts of Phases 10 and 11) and agent_history.csv (the earlier
+phases' recorded results). Writes docs/eval_report.md and changes nothing else. The report is built from
+the files and git, never from a file's date on disk, so a fresh clone writes the same bytes. Exit code 0
+when every held-out paragraph and explanation and every eval paragraph has a hand verdict, otherwise 1.
 
     .venv\\Scripts\\python.exe scripts\\eval_report.py
-    .venv\\Scripts\\python.exe scripts\\eval_report.py --commit-b 8a81692
 
---commit-b is the commit that froze held-out batch A; its time is compared with every held-out run's start.
+Each held-out batch's freeze commit is the last commit that changed data/<set>/ or evals/<set>/; its time
+is compared with the start of every run of that batch.
 """
 
 import argparse
@@ -31,7 +31,9 @@ from ap_copilot.emails import EXPORT_DATE, add_business_days
 BAR = 0.8  # Phase 4 decision 4: 80% on every scored column with 5 or more cases
 COLUMNS = ("first_tool", "duplicate_verdict", "po_match", "mismatch_flag", "category_suggestion", "rules_fields")
 CHECKERS = ("check_data.py", "check_rules.py", "check_emails.py", "check_followups.py")
-SETS = ("eval", "heldout_a")
+SETS = ("eval", "heldout_a", "heldout_b")
+HELD_OUT = SETS[1:]
+LABEL = {"eval": "22-case eval", "heldout_a": "held-out A", "heldout_b": "held-out B"}
 PARAGRAPH = ("paragraph_day0", "paragraph_followup")  # the kinds in hand_scores.csv
 DAY4, DAY5 = (add_business_days(EXPORT_DATE, day) for day in (4, 5))
 
@@ -159,16 +161,18 @@ def run_checker(script: str, data_set: str) -> list[str]:
     return lines[-3:] if script == "check_followups.py" else lines[-2:] if script == "check_emails.py" else lines[-1:]
 
 
-def commit_time(commit: str) -> datetime | None:
-    """A commit's time from git, or None when git doesn't know the commit."""
-    done = subprocess.run(["git", "log", "-1", "--format=%cI", commit], cwd=ROOT, capture_output=True, text=True)
-    return datetime.fromisoformat(done.stdout.strip()) if done.returncode == 0 and done.stdout.strip() else None
+def freeze_commit(data_set: str) -> tuple[str, datetime] | None:
+    """The last commit that changed a held-out batch's files, and its time; None when git has none."""
+    done = subprocess.run(["git", "log", "-1", "--format=%h %cI", "--", f"data/{data_set}", f"evals/{data_set}"],
+                          cwd=ROOT, capture_output=True, text=True)
+    if done.returncode or not done.stdout.strip():
+        return None
+    commit, when = done.stdout.split()
+    return commit, datetime.fromisoformat(when)
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Build docs/eval_report.md from the saved runs.")
-    parser.add_argument("--commit-b", default="8a81692", help="the commit that froze held-out batch A")
-    args = parser.parse_args()
+    argparse.ArgumentParser(description="Build docs/eval_report.md from the saved runs.").parse_args()
     hand = read_csv(ROOT / "docs" / "hand_scores.csv")
     history = read_csv(ROOT / "docs" / "agent_history.csv")
     runs = {data_set: {key: load(path) for key, path in files(data_set).items()} for data_set in SETS}
@@ -187,8 +191,8 @@ def main() -> int:
     def comm_calls(data_set: str) -> tuple[list[dict], list[dict]]:
         return split_calls(runs[data_set]["emails"], runs[data_set]["day5"])
 
-    def row_for(data_set: str, job: str) -> list:
-        """One summary row: the job's 22-case and held-out results, the bar, and what the tuning was."""
+    def row_for(job: str) -> list:
+        """One summary row: the job's 22-case and held-out results, the bar on each batch, and the tuning."""
         title = {"po": "PO investigator", "nonpo": "Non-PO investigator", "replies": "Reply interpreter"}[job]
         agent = {"po": "po_investigator", "nonpo": "nonpo_investigator", "replies": "reply_interpreter"}[job]
         results = {}
@@ -200,22 +204,24 @@ def main() -> int:
             else:
                 cases = runs[each][job]["cases"]
                 columns = [(column, good, total) for column, (good, total) in tally(cases).items()]
-                columns += [("explanations", *hand_rate(hand, each, job, "explanation"))] if each == "heldout_a" else []
+                columns += [("explanations", *hand_rate(hand, each, job, "explanation"))] if each in HELD_OUT else []
                 every = sum(not any(case["results"].values()) for case in cases)
                 results[each] = (f"{rate(every, len(cases))} cases match every column", columns)
         old = current[agent]
-        return [title, f"{results['eval'][0]}; {old['tuned']}", old["fix_rounds"], results["heldout_a"][0], "80%",
-                meets(results["heldout_a"][1])]
+        return [title, f"{results['eval'][0]}; {old['tuned']}", old["fix_rounds"],
+                *[part for each in HELD_OUT for part in (results[each][0], meets(results[each][1]))]]
 
     lines = ["# AP Invoice Copilot: evaluation report", "",
              "Built by `scripts/eval_report.py` from the saved run files, the four checkers, `docs/hand_scores.csv`, "
              "and `docs/agent_history.csv`. The 22-case eval is the **tuned set**: its results show regression, not "
              "generalization. Held-out batch A is the **untuned set**: it was keyed and committed before any model saw "
-             "it, and its results stand as recorded.", ""]
+             "it, and its results stand as recorded. Held-out batch B is the **confirmation run** of the code as it "
+             "ships: generated, keyed blind, and committed before any run, then run once with no change before or "
+             "after it. Its results stand beside A's, and it was the last held-out batch.", ""]
 
     # 1. Summary
     lines += ["## 1. Summary", ""]
-    rows = [row_for("eval", job) for job in ("po", "nonpo", "replies")]
+    rows = [row_for(job) for job in ("po", "nonpo", "replies")]
     for job, title in (("communicator_day0", "Communicator, day 0"), ("communicator_followup", "Communicator, follow-ups")):
         kind = 0 if job == "communicator_day0" else 1
         old = current[job]
@@ -225,17 +231,17 @@ def main() -> int:
             good, total = hand_rate(hand, each, "communicator", PARAGRAPH[kind])
             parts[each] = (f"hand score {rate(good, total)}; fact check first try {rate(sum(not c['problems'] for c in calls), len(calls))}",
                            good, total)
-        rows.append([title, f"{parts['eval'][0]}; {old['tuned']}", old["fix_rounds"], parts["heldout_a"][0], "80%",
-                     meets([("paragraphs", parts["heldout_a"][1], parts["heldout_a"][2])])])
-    lines += table(["Job", "22-case eval (tuned or untuned)", "Fix rounds", "Held-out A", "Bar", "Bar met on held-out A"], rows)
-    lines += ["The non-PO first lookup scores an order between two reasonable lookups on multi-task cases (Phase 8); its "
-              "number stands as recorded. A job meets the bar when every column with 5 or more cases reaches 80%; "
-              "columns with fewer cases are n of N with no bar.", ""]
+        rows.append([title, f"{parts['eval'][0]}; {old['tuned']}", old["fix_rounds"],
+                     *[part for each in HELD_OUT for part in (parts[each][0], meets([("paragraphs", *parts[each][1:])]))]])
+    lines += table(["Job", "22-case eval (tuned or untuned)", "Fix rounds", "Held-out A", "Bar met on held-out A",
+                    "Held-out B", "Bar met on held-out B"], rows)
+    lines += ["The bar is 80%: a job meets it when every column with 5 or more cases reaches 80%; columns with fewer "
+              "cases are n of N with no bar. The non-PO first lookup scores an order between two reasonable lookups on "
+              "multi-task cases (Phase 8); its number stands as recorded.", ""]
 
     # 2. Rules
     lines += ["## 2. Rules (code only, no model)", ""]
-    rows = [[script, "22-case eval" if each == "eval" else "held-out A", " / ".join(run_checker(script, each))]
-            for script in CHECKERS for each in SETS]
+    rows = [[script, LABEL[each], " / ".join(run_checker(script, each))] for script in CHECKERS for each in SETS]
     lines += table(["Checker", "Data set", "Last lines"], rows)
 
     # 3. Each job
@@ -243,7 +249,7 @@ def main() -> int:
               "Reasoning: the 22-case runs of qwen3:14b used the model's default (it thinks by default); the held-out runs "
               "used `THINK=on`, which asks for the same thing. Run times are recorded, not scored.", ""]
     for each in SETS:
-        label = "22-case eval" if each == "eval" else "held-out A"
+        label = LABEL[each]
         for job, agent in (("po", "po_investigator"), ("nonpo", "nonpo_investigator")):
             run = runs[each][job]
             cases = run["cases"]
@@ -258,7 +264,7 @@ def main() -> int:
                       f"fallbacks: {fell_back}.",
                       f"- Evidence-check correction rate: {rate(corrected, corrected + fell_back)} rejected answers corrected on a retry.",
                       f"- Cases with every task right on the first attempt: {rate(first_time, len(cases))}."]
-            lines += [f"- Explanations by hand: {rate(*hand_rate(hand, each, job, 'explanation'))}."] if each == "heldout_a" else []
+            lines += [f"- Explanations by hand: {rate(*hand_rate(hand, each, job, 'explanation'))}."] if each in HELD_OUT else []
             lines += [""]
         calls = runs[each]["replies"]["calls"]
         matched = sum((call["label"], call["detail"]) == (call["expected_label"], call["expected_detail"]) for call in calls)
@@ -305,7 +311,7 @@ def main() -> int:
     lines += ["## 5. Caps", "", "A call stops at its cap, thinking tokens included. `done_reason` is blank in runs before Phase 10.", ""]
     rows = []
     for each in SETS:
-        label = "eval" if each == "eval" else "held-out A"
+        label = LABEL[each]
         for job, agent in (("po", "po_investigator"), ("nonpo", "nonpo_investigator")):
             rows.append([label, agent, *stats([call for case in runs[each][job]["cases"] for call in case["model_calls"]], MAX_TOKENS[agent])])
         rows.append([label, "reply_interpreter", *stats(runs[each]["replies"]["calls"], MAX_TOKENS["reply_interpreter"])])
@@ -316,7 +322,7 @@ def main() -> int:
     # 6. Appendix
     lines += ["## 6. Per-case appendix", "", "Each cell is what the agent gave / what the eval expects; ✗ marks a miss.", ""]
     for each in SETS:
-        label = "22-case eval" if each == "eval" else "held-out A"
+        label = LABEL[each]
         for job in ("po", "nonpo"):
             lines += [f"### {job} investigator, {label}", ""]
             explain, _ = verdicts(hand, each, job, "explanation")
@@ -326,7 +332,7 @@ def main() -> int:
                 cells = [f"{answer[column]} / {want[column]}" + (" ✗" if case["results"][column] else "") if column in case["results"] else "-"
                          for column in ("first_tool", "duplicate_verdict", "po_match", "mismatch_flag", "category_suggestion")]
                 marks = [explain.get(f"{case['exception_id']}:{task}", {}).get("verdict", "not scored") for task in case["tasks"]
-                         if task.endswith("_explanation")] if each == "heldout_a" else []
+                         if task.endswith("_explanation")] if each in HELD_OUT else []
                 unscored += marks.count("not scored")
                 rows.append([case["exception_id"], *cells, case["results"]["rules_fields"] or "ok", len(case["checks"]),
                              len(case["fallbacks"]), ", ".join(marks) or "-"])
@@ -352,25 +358,25 @@ def main() -> int:
 
     # 7. Provenance
     lines += ["## 7. Provenance", ""]
-    before = commit_time(args.commit_b)
-    lines += [f"Commit `{args.commit_b}` (batch A frozen): {before.isoformat() if before else 'not found by git'}.", ""]
-    rows, late = [], []
-    for each in SETS:
-        for key, path in files(each).items():
-            run = json.loads(path.read_text(encoding="utf-8"))
-            starts = [item["started_at"] for item in run.get("cases", []) + run.get("calls", []) if item.get("started_at")]
-            first_start = datetime.fromisoformat(min(starts)).astimezone() if starts else None
-            saved = datetime.fromtimestamp(path.stat().st_mtime).astimezone()
-            if each == "heldout_a" and before:
-                late.append((first_start or saved) > before)
-            rows.append([path.relative_to(ROOT).as_posix(), first_start.isoformat(timespec="seconds") if first_start else "not recorded",
-                         saved.isoformat(timespec="seconds")])
-    lines += table(["File read", "First case started", "File saved"], rows)
-    lines += ["Held-out runs after commit B: " + (f"{sum(late)} of {len(late)} files started or saved after it." if before else "not checked.")
-              + " Day-0 and day runs record no start time; they replay the investigator and interpreter runs, which do, "
+    freeze = {each: freeze_commit(each) for each in HELD_OUT}
+    lines += [f"Held-out {LABEL[each][-1]} frozen by commit `{freeze[each][0]}`: {freeze[each][1].isoformat()}."
+              if freeze[each] else f"Held-out {LABEL[each][-1]}: no commit found by git." for each in HELD_OUT] + [""]
+    rows, late = [], {each: [] for each in HELD_OUT}
+    for each, path in [(each, path) for each in SETS for path in files(each).values()]:
+        run = json.loads(path.read_text(encoding="utf-8"))
+        starts = [item["started_at"] for item in run.get("cases", []) + run.get("calls", []) if item.get("started_at")]
+        first_start = datetime.fromisoformat(min(starts)) if starts else None  # the run machine's local time, as recorded
+        if each in HELD_OUT and freeze[each] and first_start:
+            late[each].append(first_start > freeze[each][1].replace(tzinfo=None))  # the commit's time on the same clock
+        rows.append([path.relative_to(ROOT).as_posix(), first_start.isoformat(timespec="seconds") if first_start else "not recorded"])
+    lines += table(["File read", "First case started (local time)"], rows)
+    lines += [f"Held-out {LABEL[each][-1]} runs started after its freeze commit: "
+              + (f"{sum(late[each])} of {len(late[each])}." if freeze[each] else "not checked.") for each in HELD_OUT]
+    lines += ["Day-0 and day runs record no start time; they replay the investigator and interpreter runs, which do, "
               "so they cannot have started earlier.", "",
               "Also read: `docs/hand_scores.csv`, `docs/agent_history.csv`, `evals/expected_outcomes.csv`, "
-              "`evals/heldout_a/expected_outcomes.csv`, and the output of the four checkers.", ""]
+              "`evals/heldout_a/expected_outcomes.csv`, `evals/heldout_b/expected_outcomes.csv`, and the output of the "
+              "four checkers.", ""]
 
     path = ROOT / "docs" / "eval_report.md"
     path.parent.mkdir(exist_ok=True)

@@ -4,16 +4,18 @@ Each invoice waiting in output/phase10/checkpoints.sqlite resumes with the as-of
 reads the inbox replies dated up to it, the reply interpreter labels each new one (replayed
 from output/phase9/replies_<its model>.json, written by scripts/run_replies.py, by default;
 --interpreter live runs the model), code sends what is due (a waiting approval, a reminder, an
-escalation), the communicator writes each follow-up paragraph live, and the day is logged in
+escalation), the communicator writes each follow-up paragraph (replayed from the saved run of that day,
+output/phase10/day_<as_of>.json, by default; --communicator live runs the model), and the day is logged in
 output/phase10/decision_log.jsonl. The threads are compared with evals/expected_threads.csv as
 check_followups.py compares its own. An invoice already run for that date is left as it is, so a
 second run of the same day changes nothing. Saves output/phase10/day_<as_of>.json and .md, built
 from the saved state, so a second run writes the same files. Exit code 0 when every follow-up
-paragraph passed the fact check on the first try and every thread and reply matches, otherwise 1.
+paragraph passed the fact check on the first try and every thread and reply matches, otherwise 1. A replay
+saves day_<as_of>_replay.json and .md, so the saved run is never overwritten.
 
     .venv\\Scripts\\python.exe scripts\\run_day.py --day 4
     .venv\\Scripts\\python.exe scripts\\run_day.py --day 5
-    .venv\\Scripts\\python.exe scripts\\run_day.py --as-of 2026-12-08 --interpreter live
+    .venv\\Scripts\\python.exe scripts\\run_day.py --as-of 2026-12-08 --interpreter live --communicator live
 
 --day N is the demo calendar's day N: N business days after day 0 (2026-11-30). --set runs a
 held-out batch in output/phase10/<set>/, replaying its interpreter run from that folder.
@@ -84,6 +86,8 @@ def main() -> int:
     when.add_argument("--as-of", help="the run's date, YYYY-MM-DD")
     parser.add_argument("--interpreter", choices=("saved", "live"), default="saved",
                         help="replay the saved reply interpreter run (default) or run the model live")
+    parser.add_argument("--communicator", choices=("saved", "live"), default="saved",
+                        help="replay the follow-up paragraphs saved for this day (default) or run the model live")
     parser.add_argument("--set", choices=DATA_SETS, default="eval", help="the data set (default: the 22-case eval)")
     args = parser.parse_args()
     folders = data_set(args.set)
@@ -112,7 +116,14 @@ def main() -> int:
     else:
         interpreter = OllamaClient("reply_interpreter")
         source = interpreter.model
-    writer = OllamaClient("communicator")
+    if args.communicator == "saved":
+        saved_day = output / f"day_{as_of}.json"
+        shown_day = saved_day.relative_to(ROOT).as_posix()
+        if not saved_day.exists():
+            parser.error(f"no saved follow-up run: {shown_day} doesn't exist; use --communicator live")
+        writer = CallReplay(load_calls(saved_day, "writer_calls")[1], get_model("communicator"), shown_day)
+    else:
+        writer = OllamaClient("communicator")
     connection = sqlite3.connect(checkpoints, check_same_thread=False)
     saver = SqliteSaver(connection)
     log = DecisionLog(output / "decision_log.jsonl")
@@ -169,7 +180,7 @@ def main() -> int:
     print(f"  threads: {matched} of {thread_rows} match")
     print(f"  decision log: {len(log.entries())} entries")
 
-    name = f"day_{as_of}"
+    name = f"day_{as_of}" + ("_replay" if args.communicator == "saved" else "")  # the saved run: live runs only
     run = {"as_of": as_of, "interpreter": source, "communicator": writer.model, "cases": cases}
     (output / f"{name}.json").write_text(json.dumps(run, indent=2, ensure_ascii=False), encoding="utf-8")
     lines = [f"# Follow-up run — as of {as_of}, communicator {writer.model}"]
