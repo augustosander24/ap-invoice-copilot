@@ -1,0 +1,30 @@
+exception_id,decision,reason
+EX-201,confirm,
+EX-202,confirm,
+EX-203,confirm,
+EX-204,confirm,
+EX-205,confirm,
+EX-206,confirm,
+EX-207,confirm,
+EX-208,confirm,
+EX-209,confirm,
+EX-210,duplicate,"Same PO, date, and amount as posted CJS-50412, which already billed PO-27210 in full."
+EX-211,duplicate,"Same number as posted DHS-40917 once the space is read as a dash, with the same PO, date, and amount."
+EX-212,not_duplicate,"Posted IFW-0233 is a year older, on another PO, for a different amount: a separate charge."
+EX-213,duplicate,"Same number as posted 000782 without the leading zeros, with the same PO, date, and amount."
+EX-214,confirm,
+EX-215,confirm,
+EX-216,confirm,
+EX-217,confirm,
+EX-218,confirm,
+EX-219,confirm,
+EX-220,confirm,
+EX-221,confirm,
+EX-222,confirm,
+EX-223,confirm,
+EX-224,confirm,
+EX-225,confirm,
+EX-226,confirm,
+EX-227,confirm,
+EX-228,confirm,
+EX-229,confirm,

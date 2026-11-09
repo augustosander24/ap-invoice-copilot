@@ -1,0 +1,13 @@
+person_id,name,email,title,department,role,reports_to
+P-101,Margaret Hale,margaret.hale@northgate.example,Chief Financial Officer,Finance,manager,
+P-102,Daniel Ortiz,daniel.ortiz@northgate.example,Controller,Finance,manager,P-101
+P-103,Renee Walsh,renee.walsh@northgate.example,AP Manager,Finance,ap,P-102
+P-104,AP Team,ap@northgate.example,Accounts Payable Team,Finance,ap,P-103
+P-105,Gregory Lin,gregory.lin@northgate.example,Purchasing Manager,Purchasing,manager,P-101
+P-106,Sofia Ramos,sofia.ramos@northgate.example,Buyer,Purchasing,buyer,P-105
+P-107,Tom Keller,tom.keller@northgate.example,Buyer,Purchasing,buyer,P-105
+P-108,Laura Mendes,laura.mendes@northgate.example,Operations Director,Operations,manager,P-101
+P-109,Kevin Doyle,kevin.doyle@northgate.example,Facilities Manager,Operations,manager,P-108
+P-110,Priya Nair,priya.nair@northgate.example,IT Manager,IT,manager,P-101
+P-111,Marcus Reed,marcus.reed@northgate.example,Warehouse Supervisor,Operations,staff,P-108
+P-112,Hannah Cho,hannah.cho@northgate.example,IT Analyst,IT,staff,P-110

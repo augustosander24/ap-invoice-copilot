@@ -1,0 +1,19 @@
+message_id,received_date,from_email,vendor_id,invoice_number,body
+M-51,2026-12-02,tom.keller@northgate.example,V-1201,IFW-0318,We agreed 14.60 for the washers. Pay the PO price and ask Ironclad for a credit on the difference.
+M-52,2026-12-02,ar@ironcladfastener.example,V-1201,IFW-0318,Our invoice total was keyed wrong. A corrected invoice will reach you by December 4.
+M-53,2026-12-01,sofia.ramos@northgate.example,V-1202,CJS-50733,"The lower liner price is fine, Clearpath ran a promotion. Go ahead and pay it as billed."
+M-54,2026-12-03,sofia.ramos@northgate.example,V-1204,DHS-41260,Delta admits they billed four hoses too many. A corrected invoice is coming by December 8.
+M-55,2026-12-02,tom.keller@northgate.example,V-1201,IFW-0331,Did Ironclad raise the anchor bolt price? I don't see a new quote anywhere.
+M-56,2026-12-03,ar@clearpathjanitorial.example,V-1202,CJS-50761,"Thanks, we found the order: PO-27206. We'll reissue the invoice with that PO number tomorrow."
+M-57,2026-12-02,ar@deltahydraulics.example,V-1204,DHS-41305,Sofia Ramos ordered the seal kits from us. Please check the PO with her.
+M-58,2026-12-03,ar@harlowlabel.example,V-1203,HLP-7802,Should we bill the pallet labels to PO-27209 instead of the old order?
+M-59,2026-12-02,kevin.doyle@northgate.example,V-2202,SLE-91884,Silver Lake mentioned a meter swap and a corrected bill sometime next week. Not sure yet.
+M-60,2026-12-07,laura.mendes@northgate.example,V-2203,MWU-5534,Is the lower water bill because of the leak repair credit from October?
+M-61,2026-12-01,kevin.doyle@northgate.example,V-3201,SLC-2026-11,Laura Mendes signs off on the logistics center lease. Please send it to her.
+M-62,2026-12-03,priya.nair@northgate.example,V-3202,MCO-2026-11,Don't pay the furniture. Only the office rent was agreed with Maple Court.
+M-63,2026-12-02,priya.nair@northgate.example,V-5201,DVC-5517,"Reject it. We cancelled DocuVault in October, so this charge shouldn't be billed."
+M-64,2026-12-01,laura.mendes@northgate.example,V-5202,SWS-2207,Priya Nair approves ShiftWise invoices now. Please route this one to her.
+M-65,2026-12-02,marcus.reed@northgate.example,V-6201,MEP-0412,"Confirmed, Morrow did the roof drainage inspection and sent the report."
+M-66,2026-12-07,kevin.doyle@northgate.example,V-6201,MEP-0412,"Reject it. The inspection was covered by the warranty, so we shouldn't pay Morrow for it."
+M-67,2026-12-01,renee.walsh@northgate.example,V-6202,TTA-1188,"Yes, Tidewater completed the nexus review in November. Service received."
+M-68,2026-12-07,daniel.ortiz@northgate.example,V-6202,TTA-1188,I'll get to this one after the month-end close.

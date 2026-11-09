@@ -1,0 +1,21 @@
+vendor_id,vendor_name,category,cost_center,contact_email,lease_amount
+V-1201,Ironclad Fastener Works,inventory,,ar@ironcladfastener.example,
+V-1202,Clearpath Janitorial Supply,inventory,,ar@clearpathjanitorial.example,
+V-1203,Harlow Label & Print,inventory,,ar@harlowlabel.example,
+V-1204,Delta Hydraulics Supply,inventory,,ar@deltahydraulics.example,
+V-2201,Brookfield Gas & Light,utilities,CC-100,ar@brookfieldgas.example,
+V-2202,Silver Lake Electric,utilities,CC-200,ar@silverlakeelectric.example,
+V-2203,Meadowbrook Water Utility,utilities,CC-100,ar@meadowbrookwater.example,
+V-2204,Highland Power District,utilities,CC-300,ar@highlandpower.example,
+V-2205,GreenLoop Recycling,utilities,CC-200,ar@greenlooprecycling.example,
+V-3201,Southpoint Logistics Center,rent,CC-200,ar@southpointlogistics.example,9600.00
+V-3202,Maple Court Offices,rent,CC-300,ar@maplecourt.example,3250.00
+V-5201,DocuVault Cloud Storage,subscriptions,CC-300,ar@docuvault.example,
+V-5202,ShiftWise Scheduling,subscriptions,CC-100,ar@shiftwise.example,
+V-6201,Morrow Engineering Partners,professional_services,CC-200,ar@morrowengineering.example,
+V-6202,Tidewater Tax Advisors,professional_services,CC-400,ar@tidewatertax.example,
+V-7201,Fairhaven Electric Co-op,,,ar@fairhavenelectric.example,
+V-7202,Pier Nine Parking,,,ar@piernineparking.example,
+V-7203,Insightful Survey Tools,,,ar@insightfulsurvey.example,
+V-7204,Carver Recruiting Partners,,,ar@carverrecruiting.example,
+V-7205,Westbrook County Assessor,,,ar@westbrookcounty.example,

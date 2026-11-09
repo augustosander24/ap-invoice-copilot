@@ -182,7 +182,7 @@ tuned on.
 | Batch | Cases | Replies | Files | Status |
 |---|---|---|---|---|
 | A (`heldout_a`) | 29: `EX-101`–`EX-129` (13 PO, 16 non-PO) | 18: `M-21`–`M-38` | `data/heldout_a/`, `evals/heldout_a/` | generated, keyed, frozen, run in Phase 10 |
-| B (`heldout_b`) | 29: `EX-201`–`EX-229` | 18: `M-51`–`M-68` | tables only | sealed: generated and run only under the fall-short rule |
+| B (`heldout_b`) | 29: `EX-201`–`EX-229` (13 PO, 16 non-PO) | 18: `M-51`–`M-68` | `data/heldout_b/`, `evals/heldout_b/` | generated, keyed blind by the owner, frozen, run once in Phase 11 as the confirmation run |
 
 **How they are built.** `scripts/build_heldout.py <set>` writes a batch
 from its case tables, `data/heldout_tables/<set>.json`, the single source
@@ -197,7 +197,8 @@ held-out case:
 
 1. **By script, the code columns.** `check_data.py --set heldout_a`
    (every check, with a held-out coverage list) and `check_rules.py`,
-   `check_emails.py`, and `check_followups.py --set heldout_a`. The
+   `check_emails.py`, and `check_followups.py --set heldout_a`, and the
+   same for `heldout_b`. The
    unchanged rules engine computes each case independently of the
    generator, and every case and thread matches.
 2. **By script, the judgment columns code can test:** an expected PO match
@@ -217,18 +218,36 @@ held-out case:
    storage) don't fit the category, so AP reviews them. Two replies were
    reworded so every label keeps 3 cases. The same rules were applied to
    batch B.
+5. **Batch B, keyed blind by the owner.** Before batch B's files were
+   generated, the project owner keyed its 39 judgment items blind, from
+   an evidence-only sheet that listed the owner's batch A rulings. Three
+   of the 39 had been set by the owner when the rulings were applied to
+   batch B, so they were not blind. The owner agreed with the expected
+   answers on 35 of 39. The four differences were settled to the
+   expected answers: two by the owner's batch A rulings (asking for a
+   credit is `rejected`; a partial approval
+   is `unclear`), one category read (a monthly plan for a software
+   platform is a subscription), and one duplicate verdict. That invoice
+   bills the same goods, PO, date, and amount as a posted invoice under
+   a new number, so it bills the same charge and AP reviews it; in the
+   owner's words, in AP terms it is a billing error. No case or answer
+   changed.
 
 **The seal.** Both batches' tables and batch A's files were committed
-before the first held-out run, and every run file records its start time,
-so the history shows the answers were fixed first.
+before the first held-out run, and batch B's files before its own run.
+Every run file records its start time, so the history shows the answers
+were fixed first.
 
 **The bar and the rule for a shortfall.** 80% on every scored column with
 5 or more cases, n of N below 5, as for the tuned set. A held-out result is
 reported as it stands: no prompt, wording, fact, tool, or check changes
 because of held-out outputs, and expected answers change only for a data
-error the files prove. A model or design change for a job that falls short
-is tested once, on batch B; there is no batch C.
+error the files prove. Batch B was used once, in Phase 11, as a
+confirmation run of the code as it ships, with no change before or after
+it. That used it up: no model or design change can be tested on held-out
+data now, and there is no batch C.
 
-**Running a batch:** add `--set heldout_a` to any checker or runner, for
-example `.venv\Scripts\python.exe scripts\check_rules.py --set heldout_a`.
-Held-out runs save to `output/phase10/heldout_a/`.
+**Running a batch:** add `--set heldout_a` or `--set heldout_b` to any
+checker or runner, for example
+`.venv\Scripts\python.exe scripts\check_rules.py --set heldout_a`.
+Held-out runs save to `output/phase10/<set>/`.
