@@ -172,6 +172,8 @@ py -3.13 -m venv .venv
 copy .env.example .env
 ```
 
+Si `py` no está disponible (la versión de Python de Microsoft Store no lo incluye), usar `python -m venv .venv`, con Python 3.13.
+
 Luego se ejecuta el ciclo completo:
 
 | Paso | Comando | Resultado esperado |

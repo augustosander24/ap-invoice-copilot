@@ -170,6 +170,8 @@ py -3.13 -m venv .venv
 copy .env.example .env
 ```
 
+If `py` isn't found (the Microsoft Store Python doesn't include it), use `python -m venv .venv` instead, with Python 3.13.
+
 Then run the lifecycle:
 
 | Step | Command | Look for |
