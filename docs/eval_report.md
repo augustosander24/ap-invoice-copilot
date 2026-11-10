@@ -1,18 +1,18 @@
 # AP Invoice Copilot: evaluation report
 
-Built by `scripts/eval_report.py` from the saved run files, the four checkers, `docs/hand_scores.csv`, and `docs/agent_history.csv`. The 22-case eval is the **tuned set**: its results show regression, not generalization. Held-out batch A is the **untuned set**: it was keyed and committed before any model saw it, and its results stand as recorded.
+Built by `scripts/eval_report.py` from the saved run files, the four checkers, `docs/hand_scores.csv`, and `docs/agent_history.csv`. The 22-case eval is the **tuned set**: its results show regression, not generalization. Held-out batch A is the **untuned set**: it was keyed and committed before any model saw it, and its results stand as recorded. Held-out batch B is the **confirmation run** of the code as it ships: generated, keyed blind, and committed before any run, then run once with no change before or after it. Its results stand beside A's, and it was the last held-out batch.
 
 ## 1. Summary
 
-| Job | 22-case eval (tuned or untuned) | Fix rounds | Held-out A | Bar | Bar met on held-out A |
-|---|---|---|---|---|---|
-| PO investigator | 9 of 9 (100%) cases match every column; tuned: the code came from fix rounds 1-3 on these 9 cases with llama3.1:8b; qwen3:14b had no round of its own | 3 | 12 of 13 (92%) cases match every column | 80% | met |
-| Non-PO investigator | 9 of 12 (75%) cases match every column; untuned | 0 | 9 of 16 (56%) cases match every column | 80% | not met: first_tool 5 of 10 |
-| Reply interpreter | 18 of 18 (100%) replies; untuned, except M-08's label meaning, worded with that case in view | 0 | 16 of 18 (89%) replies | 80% | met |
-| Communicator, day 0 | hand score 23 of 23 (100%); fact check first try 23 of 23 (100%); tuned: Phase 7 rounds 1-2 on these cases, then the Phase 10 rollback and one design round (5b) on the same cases | 2 (Phase 7) + rollback + 1 design round | hand score 28 of 28 (100%); fact check first try 28 of 28 (100%) | 80% | met |
-| Communicator, follow-ups | hand score 7 of 7 (100%); fact check first try 7 of 7 (100%); tuned: Phase 9 fixes 1-2 on these 7 paragraphs, then the Phase 10 rollback and one design round (5b) on the same cases | 2 (Phase 9) + rollback + 1 design round | hand score 12 of 13 (92%); fact check first try 13 of 13 (100%) | 80% | met |
+| Job | 22-case eval (tuned or untuned) | Fix rounds | Held-out A | Bar met on held-out A | Held-out B | Bar met on held-out B |
+|---|---|---|---|---|---|---|
+| PO investigator | 9 of 9 (100%) cases match every column; tuned: the code came from fix rounds 1-3 on these 9 cases with llama3.1:8b; qwen3:14b had no round of its own | 3 | 12 of 13 (92%) cases match every column | met | 13 of 13 (100%) cases match every column | met |
+| Non-PO investigator | 9 of 12 (75%) cases match every column; untuned | 0 | 9 of 16 (56%) cases match every column | not met: first_tool 5 of 10 | 8 of 16 (50%) cases match every column | not met: first_tool 4 of 10 |
+| Reply interpreter | 18 of 18 (100%) replies; untuned, except M-08's label meaning, worded with that case in view | 0 | 16 of 18 (89%) replies | met | 17 of 18 (94%) replies | met |
+| Communicator, day 0 | hand score 23 of 23 (100%); fact check first try 23 of 23 (100%); tuned: Phase 7 rounds 1-2 on these cases, then the Phase 10 rollback and one design round (5b) on the same cases | 2 (Phase 7) + rollback + 1 design round | hand score 28 of 28 (100%); fact check first try 28 of 28 (100%) | met | hand score 28 of 28 (100%); fact check first try 28 of 28 (100%) | met |
+| Communicator, follow-ups | hand score 7 of 7 (100%); fact check first try 7 of 7 (100%); tuned: Phase 9 fixes 1-2 on these 7 paragraphs, then the Phase 10 rollback and one design round (5b) on the same cases | 2 (Phase 9) + rollback + 1 design round | hand score 12 of 13 (92%); fact check first try 13 of 13 (100%) | met | hand score 13 of 13 (100%); fact check first try 13 of 13 (100%) | met |
 
-The non-PO first lookup scores an order between two reasonable lookups on multi-task cases (Phase 8); its number stands as recorded. A job meets the bar when every column with 5 or more cases reaches 80%; columns with fewer cases are n of N with no bar.
+The bar is 80%: a job meets it when every column with 5 or more cases reaches 80%; columns with fewer cases are n of N with no bar. The non-PO first lookup scores an order between two reasonable lookups on multi-task cases (Phase 8); its number stands as recorded.
 
 ## 2. Rules (code only, no model)
 
@@ -20,12 +20,16 @@ The non-PO first lookup scores an order between two reasonable lookups on multi-
 |---|---|---|
 | check_data.py | 22-case eval | all checks passed |
 | check_data.py | held-out A | all checks passed |
+| check_data.py | held-out B | all checks passed |
 | check_rules.py | 22-case eval | 22 of 22 cases match |
 | check_rules.py | held-out A | 29 of 29 cases match |
+| check_rules.py | held-out B | 29 of 29 cases match |
 | check_emails.py | 22-case eval | threads: 21 of 21 match / 22 of 22 cases match |
 | check_emails.py | held-out A | threads: 21 of 21 match / 29 of 29 cases match |
+| check_emails.py | held-out B | threads: 21 of 21 match / 29 of 29 cases match |
 | check_followups.py | 22-case eval | replies: 18 of 18 matched to their threads / threads: 21 of 21 match / 22 of 22 cases match |
 | check_followups.py | held-out A | replies: 18 of 18 matched to their threads / threads: 21 of 21 match / 29 of 29 cases match |
+| check_followups.py | held-out B | replies: 18 of 18 matched to their threads / threads: 21 of 21 match / 29 of 29 cases match |
 
 ## 3. Each agent job
 
@@ -113,6 +117,48 @@ Reasoning: the 22-case runs of qwen3:14b used the model's default (it thinks by 
 | rejected | 3 of 3 (100%) |
 | unclear | 1 of 3 (33%) |
 
+### po_investigator, held-out B (model qwen3:14b, cap 4096 tokens, 4 h 44 min)
+
+| Column | Cases matching |
+|---|---|
+| first_tool | 13 of 13 (100%) |
+| duplicate_verdict | 5 of 5 (100%) |
+| po_match | 7 of 7 (100%) |
+| rules_fields | 13 of 13 (100%) |
+
+- Task answers right on the first attempt: 9 of 18 (50%); after retries: 18 of 18 (100%); fallbacks: 0.
+- Evidence-check correction rate: 9 of 9 (100%) rejected answers corrected on a retry.
+- Cases with every task right on the first attempt: 6 of 13 (46%).
+- Explanations by hand: 6 of 6 (100%).
+
+### nonpo_investigator, held-out B (model qwen3:14b, cap 4096 tokens, 1 h 40 min)
+
+| Column | Cases matching |
+|---|---|
+| first_tool | 4 of 10 (40%) |
+| mismatch_flag | 9 of 11 (82%) |
+| category_suggestion | 5 of 5 (100%) |
+| rules_fields | 14 of 16 (88%) |
+
+- Task answers right on the first attempt: 19 of 21 (90%); after retries: 21 of 21 (100%); fallbacks: 0.
+- Evidence-check correction rate: 2 of 2 (100%) rejected answers corrected on a retry.
+- Cases with every task right on the first attempt: 14 of 16 (88%).
+- Explanations by hand: 5 of 5 (100%).
+
+### reply_interpreter, held-out B (model qwen3:14b, cap 4096 tokens, 34 min)
+
+- Replies matching (label and detail): 17 of 18 (94%).
+- Code check corrections (the model's label made unclear by a failed date or person): 1; M-59 said correction_coming.
+
+| Expected label | Matching |
+|---|---|
+| approved | 3 of 3 (100%) |
+| correction_coming | 3 of 3 (100%) |
+| question | 3 of 3 (100%) |
+| redirected | 3 of 3 (100%) |
+| rejected | 3 of 3 (100%) |
+| unclear | 2 of 3 (67%) |
+
 Earlier runs, from `docs/agent_history.csv`:
 
 | Job | Phase | Run | Model | Result | Tuned? | Fix rounds | Note |
@@ -145,6 +191,8 @@ Earlier runs, from `docs/agent_history.csv`:
 | eval | follow-ups | 7 of 7 (100%) | 7 of 7 (100%) (hand run 2) | 2 min |
 | heldout_a | day 0 | 28 of 28 (100%) | 28 of 28 (100%) (hand run 1) | 5 min |
 | heldout_a | follow-ups | 13 of 13 (100%) | 12 of 13 (92%) (hand run 1) | 3 min |
+| heldout_b | day 0 | 28 of 28 (100%) | 28 of 28 (100%) (hand run 1) | 5 min |
+| heldout_b | follow-ups | 13 of 13 (100%) | 13 of 13 (100%) (hand run 1) | 3 min |
 
 The fact check proves figures and names exist in the facts, not that a sentence is right; the hand score reads each paragraph the model wrote, before any operator edit. The eval's paragraphs are design-informed (Phase 7 rounds, Phase 9 fixes, the Phase 10 rollback); the held-out paragraphs are not.
 
@@ -154,14 +202,18 @@ A call stops at its cap, thinking tokens included. `done_reason` is blank in run
 
 | Set | Agent | Calls | Longest prompt (tokens) | Longest reply | Cut by the cap |
 |---|---|---|---|---|---|
-| eval | po_investigator | 56 | 1867 | 1792 of 4096 | 0 |
-| eval | nonpo_investigator | 19 | 1732 | 802 of 4096 | 0 |
-| eval | reply_interpreter | 18 | 333 | 1373 of 4096 | 0 |
-| eval | communicator | 30 | 243 | 104 of 512 | 0 |
+| 22-case eval | po_investigator | 56 | 1867 | 1792 of 4096 | 0 |
+| 22-case eval | nonpo_investigator | 19 | 1732 | 802 of 4096 | 0 |
+| 22-case eval | reply_interpreter | 18 | 333 | 1373 of 4096 | 0 |
+| 22-case eval | communicator | 30 | 243 | 104 of 512 | 0 |
 | held-out A | po_investigator | 69 | 1796 | 4096 of 4096 | 1 |
 | held-out A | nonpo_investigator | 39 | 1786 | 912 of 4096 | 0 |
 | held-out A | reply_interpreter | 18 | 338 | 686 of 4096 | 0 |
 | held-out A | communicator | 41 | 253 | 105 of 512 | 0 |
+| held-out B | po_investigator | 71 | 1755 | 4096 of 4096 | 1 |
+| held-out B | nonpo_investigator | 40 | 1803 | 1015 of 4096 | 0 |
+| held-out B | reply_interpreter | 18 | 334 | 1511 of 4096 | 0 |
+| held-out B | communicator | 41 | 247 | 109 of 512 | 0 |
 
 ## 6. Per-case appendix
 
@@ -364,25 +416,142 @@ Each cell is what the agent gave / what the eval expects; ✗ marks a miss.
 | EX-117:P-108:approval_request:reminder | stop | passed | correct | Style: ends 'Approval is needed.' (redundant) |
 | EX-117:P-108:approval_request:escalation | stop | passed | correct | Style: ends 'Approval is needed.' (redundant) |
 
+### po investigator, held-out B
+
+| Case | First lookup | Duplicate | PO match | Content mismatch | Category | Rules fields | Attempts | Fallbacks | Explanations (hand) |
+|---|---|---|---|---|---|---|---|---|---|
+| EX-201 | po / po | - | - | - | - | ok | 2 | 0 | correct |
+| EX-202 | po / po | - | - | - | - | ok | 1 | 0 | correct |
+| EX-203 | receipts / po\|receipts | - | - | - | - | ok | 1 | 0 | correct |
+| EX-204 | receipts / po\|receipts | - | - | - | - | ok | 1 | 0 | correct |
+| EX-205 | po / po\|receipts | - | - | - | - | ok | 2 | 0 | correct, correct |
+| EX-206 | open_pos / open_pos | - | PO-27206 / PO-27206 | - | - | ok | 1 | 0 | - |
+| EX-207 | open_pos / po\|open_pos | - | PO-27207 / PO-27207 | - | - | ok | 1 | 0 | - |
+| EX-208 | open_pos / po\|open_pos | - | none / none | - | - | ok | 1 | 0 | - |
+| EX-209 | similar_invoices / po\|open_pos\|similar_invoices | no / no | PO-27209 / PO-27209 | - | - | ok | 2 | 0 | - |
+| EX-210 | open_pos / po\|open_pos\|similar_invoices | yes / yes | none / none | - | - | ok | 2 | 0 | - |
+| EX-211 | similar_invoices / po\|open_pos\|similar_invoices | yes / yes | none / none | - | - | ok | 3 | 0 | - |
+| EX-212 | similar_invoices / similar_invoices | no / no | - | - | - | ok | 2 | 0 | - |
+| EX-213 | similar_invoices / po\|open_pos\|similar_invoices | yes / yes | none / none | - | - | ok | 2 | 0 | - |
+
+### nonpo investigator, held-out B
+
+| Case | First lookup | Duplicate | PO match | Content mismatch | Category | Rules fields | Attempts | Fallbacks | Explanations (hand) |
+|---|---|---|---|---|---|---|---|---|---|
+| EX-214 | - | - | - | no / no | - | ok | 1 | 0 | - |
+| EX-215 | vendor / bill_history ✗ | - | - | no / no | - | ok | 1 | 0 | correct |
+| EX-216 | vendor / bill_history ✗ | - | - | no / no | - | ok | 2 | 0 | correct |
+| EX-217 | vendor / bill_history ✗ | - | - | no / no | - | ok | 2 | 0 | correct |
+| EX-218 | - | - | - | no / yes ✗ | - | findings: got none, expected category_mismatch; recommendation: got release, expected hold | 1 | 0 | - |
+| EX-219 | vendor / vendor\|bill_history | - | - | no / no | - | ok | 1 | 0 | correct |
+| EX-220 | vendor / vendor\|bill_history | - | - | yes / yes | - | ok | 1 | 0 | correct |
+| EX-221 | - | - | - | no / yes ✗ | - | findings: got approval_required, expected approval_required;category_mismatch | 1 | 0 | - |
+| EX-222 | - | - | - | yes / yes | - | ok | 1 | 0 | - |
+| EX-223 | - | - | - | no / no | - | ok | 1 | 0 | - |
+| EX-224 | - | - | - | yes / yes | - | ok | 1 | 0 | - |
+| EX-225 | none / vendor ✗ | - | - | - | utilities / utilities | ok | 1 | 0 | - |
+| EX-226 | vendor / vendor | - | - | - | rent / rent | ok | 1 | 0 | - |
+| EX-227 | vendor / vendor | - | - | - | subscriptions / subscriptions | ok | 1 | 0 | - |
+| EX-228 | none / vendor ✗ | - | - | - | professional_services / professional_services | ok | 1 | 0 | - |
+| EX-229 | none / vendor ✗ | - | - | - | taxes / taxes | ok | 1 | 0 | - |
+
+### reply interpreter, held-out B
+
+| Reply | Email | Got / expected | Model said | Check |
+|---|---|---|---|---|
+| M-53 | EX-202:P-106:buyer_query | approved / approved | - | - |
+| M-61 | EX-219:P-109:approval_request | redirected P-108 / redirected P-108 | - | - |
+| M-64 | EX-222:P-108:approval_request | redirected P-110 / redirected P-110 | - | - |
+| M-67 | EX-224:P-103:service_confirmation | approved / approved | - | - |
+| M-51 | EX-201:P-107:buyer_query | rejected / rejected | - | - |
+| M-52 | EX-201:V-1201:vendor_correction | correction_coming 2026-12-04 / correction_coming 2026-12-04 | - | - |
+| M-55 | EX-205:P-107:buyer_query | question / question | - | - |
+| M-57 | EX-208:V-1204:vendor_correction | redirected P-106 / redirected P-106 | - | - |
+| M-59 | EX-215:P-109:approval_request | unclear / unclear | correction_coming | the date 2026-12-09 is not in the reply |
+| M-63 | EX-221:P-110:approval_request | rejected / rejected | - | - |
+| M-65 | EX-223:P-111:service_confirmation | approved / approved | - | - |
+| M-54 | EX-204:P-106:buyer_query | correction_coming 2026-12-08 / correction_coming 2026-12-08 | - | - |
+| M-56 | EX-206:V-1202:vendor_correction | correction_coming 2026-12-04 / correction_coming 2026-12-04 | - | - |
+| M-58 | EX-209:V-1203:vendor_correction | question / question | - | - |
+| M-62 | EX-220:P-110:approval_request | rejected / unclear ✗ | - | - |
+| M-60 | EX-216:P-108:approval_request | question / question | - | - |
+| M-66 | EX-223:P-109:approval_request | rejected / rejected | - | - |
+| M-68 | EX-224:P-102:approval_request | unclear / unclear | - | - |
+
+### communicator paragraphs, held-out B
+
+| Email | Done reason | Fact check | Hand verdict | Note |
+|---|---|---|---|---|
+| EX-201:P-107:buyer_query | stop | passed | correct |  |
+| EX-201:V-1201:vendor_correction | stop | passed | correct |  |
+| EX-202:P-106:buyer_query | stop | passed | correct |  |
+| EX-203:P-107:buyer_query | stop | passed | correct |  |
+| EX-204:P-106:buyer_query | stop | passed | correct |  |
+| EX-205:P-107:buyer_query | stop | passed | correct |  |
+| EX-206:V-1202:vendor_correction | stop | passed | correct |  |
+| EX-207:V-1203:vendor_correction | stop | passed | correct |  |
+| EX-208:V-1204:vendor_correction | stop | passed | correct |  |
+| EX-209:V-1203:vendor_correction | stop | passed | correct |  |
+| EX-210:V-1202:vendor_correction | stop | passed | correct |  |
+| EX-210:V-1202:duplicate_notice | stop | passed | correct |  |
+| EX-211:V-1204:vendor_correction | stop | passed | correct |  |
+| EX-211:V-1204:duplicate_notice | stop | passed | correct |  |
+| EX-212:V-1201:duplicate_notice | stop | passed | correct |  |
+| EX-213:V-1201:vendor_correction | stop | passed | correct |  |
+| EX-213:V-1201:duplicate_notice | stop | passed | correct |  |
+| EX-215:P-109:approval_request | stop | passed | correct |  |
+| EX-216:P-108:approval_request | stop | passed | correct |  |
+| EX-217:P-109:approval_request | stop | passed | correct | Style: ends 'Approval is needed.' (redundant) |
+| EX-219:P-109:approval_request | stop | passed | correct |  |
+| EX-220:P-110:approval_request | stop | passed | correct |  |
+| EX-221:P-110:approval_request | stop | passed | correct |  |
+| EX-222:P-108:approval_request | stop | passed | correct |  |
+| EX-223:P-111:service_confirmation | stop | passed | correct |  |
+| EX-223:P-109:approval_request | stop | passed | correct | Style: ends 'Approval is needed.' (redundant) |
+| EX-224:P-103:service_confirmation | stop | passed | correct |  |
+| EX-224:P-102:approval_request | stop | passed | correct |  |
+| EX-203:P-107:buyer_query:reminder | stop | passed | correct |  |
+| EX-203:P-107:buyer_query:escalation | stop | passed | correct |  |
+| EX-207:V-1203:vendor_correction:reminder | stop | passed | correct |  |
+| EX-207:V-1203:vendor_correction:escalation | stop | passed | correct |  |
+| EX-210:V-1202:duplicate_notice:reminder | stop | passed | correct |  |
+| EX-210:V-1202:duplicate_notice:escalation | stop | passed | correct |  |
+| EX-211:V-1204:duplicate_notice:reminder | stop | passed | correct |  |
+| EX-211:V-1204:duplicate_notice:escalation | stop | passed | correct |  |
+| EX-213:V-1201:duplicate_notice:reminder | stop | passed | correct |  |
+| EX-213:V-1201:duplicate_notice:escalation | stop | passed | correct |  |
+| EX-216:P-108:approval_request:reminder | stop | passed | correct | Style: ends 'Approval is needed.' (redundant) |
+| EX-217:P-109:approval_request:reminder | stop | passed | correct | Style: ends 'Approval is needed.' (redundant) |
+| EX-217:P-109:approval_request:escalation | stop | passed | correct | Style: ends 'Approval is needed.' (redundant); does not say the earlier email and reminder went unanswered |
+
 ## 7. Provenance
 
-Commit `8a81692` (batch A frozen): 2026-11-06T16:55:53-03:00.
+Held-out A frozen by commit `8a81692`: 2026-11-06T16:55:53-03:00.
+Held-out B frozen by commit `72f0a52`: 2026-11-09T16:31:36-03:00.
 
-| File read | First case started | File saved |
-|---|---|---|
-| output/phase6/po_run_qwen3-14b.json | not recorded | 2026-10-31T14:37:34-03:00 |
-| output/phase8/nonpo_run_qwen3-14b.json | not recorded | 2026-11-04T13:27:16-03:00 |
-| output/phase9/replies_qwen3-14b.json | not recorded | 2026-11-05T14:52:57-03:00 |
-| output/phase10/emails_llama3.1-8b.json | not recorded | 2026-11-06T14:29:37-03:00 |
-| output/phase10/day_2026-12-04.json | not recorded | 2026-11-06T14:31:06-03:00 |
-| output/phase10/day_2026-12-07.json | not recorded | 2026-11-06T14:32:04-03:00 |
-| output/phase10/heldout_a/po_run_qwen3-14b.json | 2026-11-06T17:10:46-03:00 | 2026-11-07T16:15:41-03:00 |
-| output/phase10/heldout_a/nonpo_run_qwen3-14b.json | 2026-11-07T16:15:49-03:00 | 2026-11-07T17:49:51-03:00 |
-| output/phase10/heldout_a/replies_qwen3-14b.json | 2026-11-06T18:42:41-03:00 | 2026-11-06T19:09:10-03:00 |
-| output/phase10/heldout_a/emails_llama3.1-8b.json | not recorded | 2026-11-07T18:25:25-03:00 |
-| output/phase10/heldout_a/day_2026-12-04.json | not recorded | 2026-11-07T18:28:16-03:00 |
-| output/phase10/heldout_a/day_2026-12-07.json | not recorded | 2026-11-07T18:30:17-03:00 |
+| File read | First case started (local time) |
+|---|---|
+| output/phase6/po_run_qwen3-14b.json | not recorded |
+| output/phase8/nonpo_run_qwen3-14b.json | not recorded |
+| output/phase9/replies_qwen3-14b.json | not recorded |
+| output/phase10/emails_llama3.1-8b.json | not recorded |
+| output/phase10/day_2026-12-04.json | not recorded |
+| output/phase10/day_2026-12-07.json | not recorded |
+| output/phase10/heldout_a/po_run_qwen3-14b.json | 2026-11-06T17:10:46 |
+| output/phase10/heldout_a/nonpo_run_qwen3-14b.json | 2026-11-07T16:15:49 |
+| output/phase10/heldout_a/replies_qwen3-14b.json | 2026-11-06T18:42:41 |
+| output/phase10/heldout_a/emails_llama3.1-8b.json | not recorded |
+| output/phase10/heldout_a/day_2026-12-04.json | not recorded |
+| output/phase10/heldout_a/day_2026-12-07.json | not recorded |
+| output/phase10/heldout_b/po_run_qwen3-14b.json | 2026-11-09T17:08:27 |
+| output/phase10/heldout_b/nonpo_run_qwen3-14b.json | 2026-11-10T13:28:34 |
+| output/phase10/heldout_b/replies_qwen3-14b.json | 2026-11-09T19:04:49 |
+| output/phase10/heldout_b/emails_llama3.1-8b.json | not recorded |
+| output/phase10/heldout_b/day_2026-12-04.json | not recorded |
+| output/phase10/heldout_b/day_2026-12-07.json | not recorded |
 
-Held-out runs after commit B: 6 of 6 files started or saved after it. Day-0 and day runs record no start time; they replay the investigator and interpreter runs, which do, so they cannot have started earlier.
+Held-out A runs started after its freeze commit: 3 of 3.
+Held-out B runs started after its freeze commit: 3 of 3.
+Day-0 and day runs record no start time; they replay the investigator and interpreter runs, which do, so they cannot have started earlier.
 
-Also read: `docs/hand_scores.csv`, `docs/agent_history.csv`, `evals/expected_outcomes.csv`, `evals/heldout_a/expected_outcomes.csv`, and the output of the four checkers.
+Also read: `docs/hand_scores.csv`, `docs/agent_history.csv`, `evals/expected_outcomes.csv`, `evals/heldout_a/expected_outcomes.csv`, `evals/heldout_b/expected_outcomes.csv`, and the output of the four checkers.
