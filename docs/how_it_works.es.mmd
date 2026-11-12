@@ -1,0 +1,26 @@
+---
+config:
+  flowchart:
+    wrappingWidth: 360
+---
+flowchart TD
+    X[/"Listado de facturas bloqueadas del ERP"/] --> A["Evaluación<br/>reglas, tolerancias, control de duplicados,<br/>qué requiere investigación"]
+    A -->|factura con OC| P["Investigador de facturas con OC<br/>consulta OC, recepciones e historial"]
+    A -->|factura sin OC| N["Investigador de facturas sin OC<br/>consulta proveedor e historial de facturas"]
+    P --> E["Control de evidencia<br/>cada afirmación debe citar un registro;<br/>2 reintentos y luego una salida segura"]
+    N --> E
+    E --> F["Cierre del análisis<br/>observaciones, responsable,<br/>imputación contable, recomendación"]
+    A -->|nada que investigar| F
+    F --> W["Redacción de correos<br/>plantilla en código y un párrafo<br/>del redactor, verificado"]
+    W --> R{{"Revisión de<br/>Cuentas por Pagar<br/>confirma, modifica o<br/>resuelve un posible duplicado"}}
+    R --> Q["Registro de la decisión y espera de respuestas<br/>el estado se guarda de un día a otro"]
+    Q --> I["Intérprete de respuestas<br/>clasifica cada respuesta; el código verifica<br/>fechas y personas"]
+    I --> U["Seguimiento<br/>próximo paso según la respuesta,<br/>recordatorio el día 4, escalamiento el día 5"]
+    U -->|hasta cerrar todos los casos| Q
+    classDef code fill:#e8eef7,stroke:#4a6fa5,color:#1a1a1a
+    classDef agent fill:#fdf0e1,stroke:#c9822b,color:#1a1a1a
+    classDef human fill:#e6f4ea,stroke:#3c8a50,color:#1a1a1a
+    class A,E,F,Q,U code
+    class P,N,I agent
+    class W agent
+    class R human

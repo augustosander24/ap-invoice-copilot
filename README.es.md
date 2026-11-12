@@ -66,29 +66,7 @@ Si Kevin no responde, el día 4 recibe un recordatorio con copia a su superior d
 
 ## Cómo funciona
 
-```mermaid
-flowchart TD
-    X[/"Listado de facturas bloqueadas del ERP"/] --> A["Evaluación<br/>reglas, tolerancias, control de duplicados,<br/>qué requiere investigación"]
-    A -->|factura con OC| P["Investigador de facturas con OC<br/>consulta OC, recepciones e historial"]
-    A -->|factura sin OC| N["Investigador de facturas sin OC<br/>consulta proveedor e historial de facturas"]
-    P --> E["Control de evidencia<br/>cada afirmación debe citar un registro;<br/>2 reintentos y luego una salida segura"]
-    N --> E
-    E --> F["Cierre del análisis<br/>observaciones, responsable,<br/>imputación contable, recomendación"]
-    A -->|nada que investigar| F
-    F --> W["Redacción de correos<br/>plantilla en código y un párrafo<br/>del redactor, verificado"]
-    W --> R{{"Revisión de<br/>Cuentas por Pagar<br/>confirma, modifica o<br/>resuelve un posible duplicado"}}
-    R --> Q["Registro de la decisión y espera de respuestas<br/>el estado se guarda de un día a otro"]
-    Q --> I["Intérprete de respuestas<br/>clasifica cada respuesta; el código verifica<br/>fechas y personas"]
-    I --> U["Seguimiento<br/>próximo paso según la respuesta,<br/>recordatorio el día 4, escalamiento el día 5"]
-    U -->|hasta cerrar todos los casos| Q
-    classDef code fill:#e8eef7,stroke:#4a6fa5,color:#1a1a1a
-    classDef agent fill:#fdf0e1,stroke:#c9822b,color:#1a1a1a
-    classDef human fill:#e6f4ea,stroke:#3c8a50,color:#1a1a1a
-    class A,E,F,Q,U code
-    class P,N,I agent
-    class W agent
-    class R human
-```
+<img src="docs/how_it_works.es.png" width="720" alt="Cómo funciona: el listado de facturas bloqueadas pasa por las reglas, los dos investigadores, el control de evidencia, la redacción de correos, la revisión de Cuentas por Pagar y el seguimiento diario">
 
 Azul: código. Naranja: agentes de IA. Verde: la persona.
 
@@ -335,7 +313,7 @@ Las tres más relevantes están en [Resultados](#resultados). La lista completa:
 | `scripts/` | Los comandos de la demo, los scripts de cada agente, los cuatro controles, `eval_report.py`, `build_heldout.py` |
 | `data/` | La empresa ficticia (`reference/`), el listado de excepciones y la bandeja de entrada (`input/`), los lotes de evaluación y sus tablas de casos (`heldout_tables/`). Diccionarios de datos: [`data/reference/README.md`](data/reference/README.md), [`data/input/README.md`](data/input/README.md) |
 | `evals/` | Resultados esperados e hilos de correo de cada conjunto; [`evals/README.md`](evals/README.md) |
-| `docs/` | [`eval_report.md`](docs/eval_report.md), las evaluaciones manuales, el historial de ejecuciones anteriores y el GIF de la demo |
+| `docs/` | [`eval_report.md`](docs/eval_report.md), las evaluaciones manuales, el historial de ejecuciones anteriores, el GIF de la demo y el diagrama (`how_it_works.es.png`, con su código Mermaid en `how_it_works.es.mmd`) |
 | `tests/` | 92 pruebas unitarias |
 | `output/` | Las ejecuciones registradas (ver abajo); las ejecuciones propias también se guardan aquí, fuera de git |
 

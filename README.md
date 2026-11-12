@@ -64,29 +64,7 @@ If Kevin doesn't answer, he gets a reminder on day 4 with his manager in copy, a
 
 ## How it works
 
-```mermaid
-flowchart TD
-    X[/"Exception list from the ERP"/] --> A["Assess<br/>rules, tolerances, duplicate checks,<br/>which questions need an agent"]
-    A -->|PO invoice| P["PO investigator<br/>looks up POs, receipts, history"]
-    A -->|non-PO invoice| N["Non-PO investigator<br/>looks up vendor and bill history"]
-    P --> E["Evidence check<br/>every claim must cite a record;<br/>2 retries, then a safe fallback"]
-    N --> E
-    E --> F["Finalize<br/>findings, routing, GL coding,<br/>recommendation"]
-    A -->|nothing to investigate| F
-    F --> W["Draft emails<br/>template by code, one paragraph by the<br/>communicator, fact-checked"]
-    W --> R{{"AP operator review<br/>confirm, override, or rule on a<br/>possible duplicate"}}
-    R --> Q["Log the decision, wait for replies<br/>state saved between days"]
-    Q --> I["Reply interpreter<br/>labels each reply; code checks<br/>any date or person"]
-    I --> U["Follow-up<br/>next step per reply, day 4 reminder,<br/>day 5 escalation"]
-    U -->|until every thread closes| Q
-    classDef code fill:#e8eef7,stroke:#4a6fa5,color:#1a1a1a
-    classDef agent fill:#fdf0e1,stroke:#c9822b,color:#1a1a1a
-    classDef human fill:#e6f4ea,stroke:#3c8a50,color:#1a1a1a
-    class A,E,F,Q,U code
-    class P,N,I agent
-    class W agent
-    class R human
-```
+<img src="docs/how_it_works.png" width="720" alt="How it works: the exception list goes through the rules, the two investigators, the evidence check, the email drafts, AP review, and the daily follow-up loop">
 
 Blue is code, orange is an AI agent, green is the person.
 
@@ -333,7 +311,7 @@ The three that matter most are under [Results](#results). The full list:
 | `scripts/` | The demo commands, the agent runners, the four checkers, `eval_report.py`, `build_heldout.py` |
 | `data/` | The mock company (`reference/`), the exception list and inbox (`input/`), the held-out batches, and their case tables (`heldout_tables/`). Data dictionaries: [`data/reference/README.md`](data/reference/README.md), [`data/input/README.md`](data/input/README.md) |
 | `evals/` | Expected outcomes and threads for each set; [`evals/README.md`](evals/README.md) |
-| `docs/` | [`eval_report.md`](docs/eval_report.md), the hand scores, the earlier runs' history, the demo GIF |
+| `docs/` | [`eval_report.md`](docs/eval_report.md), the hand scores, the earlier runs' history, the demo GIF, the diagram (`how_it_works.png`, with its Mermaid source in `how_it_works.mmd`) |
 | `tests/` | 92 unit tests |
 | `output/` | The saved runs (below); your own runs land here too and stay out of git |
 
